@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vowel Synth Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Noto+Music&display=swap" rel="stylesheet">
+<style>
+/* Layout: analysis displays on the left like Voce Vista, controls on the right; stacks on narrow screens. */
+:root {
+  --bg: #f3f4f6;
+  --panel: #ffffff;
+  --ink: #1b1f27;
+  --muted: #5d6573;
+  --line: #d9dce3;
+  --accent: #1f6fb2;
+  --scope-bg: #0f141c;
+  --scope-ink: #c9d3e0;
+  --scope-grid: #233042;
+  --curve: #4aa3ff;
+  --h1: #ff9f43;
+  --h2: #c084fc;
+  --hn: #9fb0c6;
+  --open: #f2c230;
+  --close: #3b82f6;
+  --whoop: #9b5de5;
+  --over: #e05d5d;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151c;
+    --panel: #181e27;
+    --ink: #e6eaf0;
+    --muted: #97a1b0;
+    --line: #2a3340;
+    --accent: #5aa9ef;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151c;
+  --panel: #181e27;
+  --ink: #e6eaf0;
+  --muted: #97a1b0;
+  --line: #2a3340;
+  --accent: #5aa9ef;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.45;
+}
+.wrap { max-width: 1280px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 20px; }
+h1 { font-size: 22px; font-weight: 600; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.sub { color: var(--muted); margin: 0; font-size: 14px; }
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 14px; align-items: start; }
+@media (max-width: 960px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.panel h2 { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0; }
+.displays { display: flex; flex-direction: column; gap: 14px; }
+
+/* readout */
+.readout { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 700px) { .readout { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.tile { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tile .k { font-size: 12px; color: var(--muted); }
+.tile .v { font-family: var(--font-mono); font-size: 20px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tile .s { font-family: var(--font-mono); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pill { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px; border-radius: 999px; font-weight: 600; font-size: 17px; color: #10131a; width: fit-content; }
+.pill.open { background: var(--open); }
+.pill.close { background: var(--close); color: #fff; }
+.pill.whoop { background: var(--whoop); color: #fff; }
+.pill.over { background: var(--over); color: #fff; }
+
+.scopewrap { background: var(--scope-bg); border-radius: 8px; padding: 6px; }
+canvas { display: block; width: 100%; }
+#spec { height: 260px; }
+#staff { height: 290px; min-width: 620px; }
+.staffwrap { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px; overflow-x: auto; }
+.kbdscroll { background: var(--scope-bg); border-radius: 8px; padding: 6px; overflow-x: auto; }
+#kbd { height: 300px; min-width: 980px; touch-action: none; cursor: pointer; }
+#wave { height: 170px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.rules { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 700px) { .rules { grid-template-columns: minmax(0, 1fr); } }
+.rule { border-left: 4px solid var(--line); padding: 2px 0 2px 10px; font-size: 13.5px; }
+.rule b { display: block; font-size: 14px; }
+.rule.open { border-color: var(--open); }
+.rule.close { border-color: var(--close); }
+.rule.whoop { border-color: var(--whoop); }
+
+/* controls */
+.controls { display: flex; flex-direction: column; gap: 14px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field .lab { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: var(--muted); }
+.field .lab output { font-family: var(--font-mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+button, select {
+  font: inherit; font-size: 14px; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 7px; padding: 6px 11px; cursor: pointer;
+}
+button:hover, select:hover { border-color: var(--accent); }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+#play { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; padding: 8px 18px; font-size: 15px; }
+#play.on { background: #c0392b; border-color: #c0392b; }
+.vowels button { font-family: var(--font-mono); min-width: 44px; font-size: 16px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; border-radius: 0; background: transparent; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.note { font-size: 12.5px; color: var(--muted); margin: 0; }
+.check { display: inline-flex; gap: 6px; align-items: center; font-size: 14px; }
+details summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+details .field { margin-top: 8px; }
+.keys { font-size: 12.5px; color: var(--muted); }
+.keys kbd { font-family: var(--font-mono); font-size: 11.5px; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; background: var(--bg); color: var(--ink); }
+#status { font-size: 13px; color: var(--muted); min-height: 1.2em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Vowel Synth Lab</h1>
+    <p class="sub">A glottal source through five vocal-tract resonances. Move pitch and vowel and watch H1 and H2 cross fR1.</p>
+  </header>
+
+  <section class="panel" aria-label="Keyboard">
+    <div class="row" style="justify-content: space-between;">
+      <div class="row" style="gap: 12px;"><h2>Keyboard: harmonics and resonances</h2><span class="pill open" id="k-timbre">Open</span><span class="note" id="k-ratio"></span></div>
+      <span class="note">Click or drag across the keys to sing a pitch. Drag the fR1 or fR2 handle to move a resonance.</span>
+    </div>
+    <div class="kbdscroll"><canvas id="kbd" aria-label="Piano keyboard with harmonics and resonances marked"></canvas></div>
+    <div class="legend">
+      <span><i class="sw" style="background: var(--h1)"></i>H1 (the sung pitch)</span>
+      <span><i class="sw" style="background: var(--h2)"></i>H2 (octave above)</span>
+      <span><i class="sw" style="background: var(--hn)"></i>H3 and up</span>
+      <span><i class="sw" style="background: var(--curve)"></i>resonance curve with fR1 to fR5</span>
+    </div>
+  </section>
+
+  <section class="panel" aria-label="Grand staff">
+    <div class="row" style="justify-content: space-between;">
+      <h2>Grand staff: harmonics and resonances</h2>
+      <span class="note">Each harmonic is written at its nearest note. The colored lines show where fR1 and fR2 sit.</span>
+    </div>
+    <div class="staffwrap"><canvas id="staff" aria-label="Grand staff showing the harmonics as notes and fR1 and fR2 as lines"></canvas></div>
+  </section>
+
+  <div class="main">
+    <div class="displays">
+      <section class="panel" aria-label="Current state">
+        <div class="readout">
+          <div class="tile"><span class="k">Pitch (fo)</span><span class="v" id="r-f0">C4</span><span class="s" id="r-f0hz">262 Hz</span></div>
+          <div class="tile"><span class="k">First resonance (fR1)</span><span class="v" id="r-f1">C5</span><span class="s" id="r-f1hz">523 Hz</span></div>
+          <div class="tile"><span class="k">fR1 ÷ fo</span><span class="v" id="r-ratio">2.0</span><span class="s">ripples per cycle</span></div>
+          <div class="tile"><span class="k">H2 (2fo)</span><span class="v" id="r-h2">C5</span><span class="s" id="r-h2hz">523 Hz</span></div>
+          <div class="tile"><span class="k">Timbre</span><span class="pill open" id="r-timbre">Open</span></div>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="Spectrum">
+        <div class="row" style="justify-content: space-between;">
+          <h2>Spectrum: harmonics and resonance curve</h2>
+          <div class="seg" role="group" aria-label="Frequency range">
+            <button type="button" data-range="2000">2 kHz</button>
+            <button type="button" data-range="4000" aria-pressed="true">4 kHz</button>
+            <button type="button" data-range="8000">8 kHz</button>
+          </div>
+        </div>
+        <div class="scopewrap"><canvas id="spec" aria-label="Spectrum of the current sound"></canvas></div>
+        <div class="legend">
+          <span><i class="sw" style="background: var(--h1)"></i>H1 (fo)</span>
+          <span><i class="sw" style="background: var(--h2)"></i>H2 (2fo)</span>
+          <span><i class="sw" style="background: var(--hn)"></i>higher harmonics</span>
+          <span><i class="sw" style="background: var(--curve)"></i>vocal-tract resonance curve</span>
+        </div>
+      </section>
+
+      <section class="panel" aria-label="Waveform">
+        <h2>Waveform: three glottal cycles, closures marked</h2>
+        <div class="scopewrap"><canvas id="wave" aria-label="Waveform of three glottal cycles"></canvas></div>
+        <div class="rules">
+          <div class="rule whoop"><b>Whoop</b>fR1 near fo. About 1 ripple per cycle.</div>
+          <div class="rule close"><b>Close</b>fR1 between fo and 2fo. About 1.5 ripples.</div>
+          <div class="rule open"><b>Open</b>fR1 at or above 2fo. 2 or more ripples.</div>
+        </div>
+        <p class="note">Boundaries are approximate. The readout calls it whoop from fR1 = 0.9 to 1.25 × fo, close from 1.25 to 2, open once fR1 is on the same piano key as H2 or higher (fR1 is read at its nearest note). Below 0.9, H1 has passed above fR1.</p>
+      </section>
+    </div>
+
+    <aside class="panel controls" aria-label="Controls">
+      <div class="row">
+        <button type="button" id="play">Play</button>
+        <button type="button" id="reset" class="ghost" title="Return every setting to where the page started. Volume stays where it is.">Reset</button>
+        <div class="field" style="flex: 1; min-width: 140px;">
+          <div class="lab"><label for="vol">Volume</label></div>
+          <input type="range" id="vol" min="0" max="1" step="0.01" value="0.6">
+        </div>
+      </div>
+      <div id="status" role="status"></div>
+
+      <div class="field">
+        <div class="lab"><label for="pitch">Pitch</label><output id="pitch-out" for="pitch">C4 · 262 Hz</output></div>
+        <input type="range" id="pitch" min="36" max="88" step="1" value="60">
+        <div class="row">
+          <button type="button" id="pdown" aria-label="Down a semitone">−1 st</button>
+          <button type="button" id="pup" aria-label="Up a semitone">+1 st</button>
+          <label class="check"><input type="checkbox" id="snap" checked> Snap to semitones</label>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="lab">Voice</span>
+        <div class="seg" role="group" aria-label="Voice set">
+          <button type="button" data-voice="treble" aria-pressed="true">Treble</button>
+          <button type="button" data-voice="low">Non-treble</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <span class="lab">Vowel</span>
+        <div class="row vowels" role="group" aria-label="Vowel">
+          <button type="button" data-vowel="i">i</button>
+          <button type="button" data-vowel="e">e</button>
+          <button type="button" data-vowel="E">ɛ</button>
+          <button type="button" data-vowel="a">a</button>
+          <button type="button" data-vowel="O">ɔ</button>
+          <button type="button" data-vowel="o" aria-pressed="true">o</button>
+          <button type="button" data-vowel="u">u</button>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="lab"><label for="f1">Vowel fR1</label><output id="f1-out" for="f1">550 Hz</output></div>
+        <input type="range" id="f1" min="200" max="1200" step="5" value="550">
+      </div>
+      <div class="field">
+        <div class="lab"><label for="f2">Vowel fR2</label><output id="f2-out" for="f2">950 Hz</output></div>
+        <input type="range" id="f2" min="600" max="3000" step="10" value="950">
+      </div>
+
+      <div class="field">
+        <span class="lab">fR1 strategy</span>
+        <div class="seg" role="group" aria-label="fR1 strategy">
+          <button type="button" data-track="fixed" aria-pressed="true">Fixed</button>
+          <button type="button" data-track="h1">Track H1</button>
+          <button type="button" data-track="h2">Track H2</button>
+        </div>
+        <p class="note">Track H1 raises fR1 with the pitch once fo reaches it, the way a singer opens the vowel to keep whoop (Price). Track H2 keeps fR1 on 2fo, the yell or belt strategy.</p>
+      </div>
+
+      <div class="field">
+        <div class="lab"><label for="reg">Register: chest ↔ head</label><output id="reg-out" for="reg">Chest-leaning</output></div>
+        <input type="range" id="reg" min="0" max="100" step="1" value="30">
+        <p class="note">Toward head: the glottis stays open longer, closure is gentler, and the ringing is damped more while the glottis is open. Moves open quotient and closure sharpness with it.</p>
+      </div>
+      <div class="field">
+        <div class="lab"><label for="decay">Decay of the ringing</label><output id="decay-out" for="decay">Medium</output></div>
+        <input type="range" id="decay" min="0" max="100" step="1" value="35">
+        <p class="note">How quickly each resonance dies away after a closure (wider bandwidths decay faster).</p>
+      </div>
+
+      <div class="field">
+        <span class="lab">Scale player</span>
+        <div class="row">
+          <select id="pattern" aria-label="Pattern">
+            <option value="scale">Octave scale, up and down</option>
+            <option value="leap">Octave leap, up and back</option>
+            <option value="glide">Slow glide, up and back</option>
+            <option value="five">Five-note scale, up and down</option>
+            <option value="bozeman">Bozeman scale: 5 6 7 6 5 4 3 2 1</option>
+          </select>
+        </div>
+        <div class="row">
+          <label for="start" class="note">Key (1)</label>
+          <select id="start" aria-label="Key, scale degree 1"></select>
+          <label for="tempo" class="note">Tempo</label>
+          <select id="tempo" aria-label="Tempo">
+            <option value="60">60</option>
+            <option value="80" selected>80</option>
+            <option value="100">100</option>
+          </select>
+          <button type="button" id="runscale">Play pattern</button>
+        </div>
+        <p class="note" id="firstnote"></p>
+      </div>
+
+      <div class="field">
+        <label class="check"><input type="checkbox" id="vib"> Vibrato</label>
+        <div class="field">
+          <div class="lab"><label for="vrate">Vibrato rate</label><output id="vrate-out" for="vrate">5.5 Hz</output></div>
+          <input type="range" id="vrate" min="3" max="8" step="0.1" value="5.5">
+        </div>
+        <div class="field">
+          <div class="lab"><label for="vext">Vibrato extent (±)</label><output id="vext-out" for="vext">0.45 st</output></div>
+          <input type="range" id="vext" min="0.05" max="1.5" step="0.05" value="0.45">
+        </div>
+      </div>
+
+      <details>
+        <summary>Source and higher resonances</summary>
+        <div class="field">
+          <span class="lab">Source</span>
+          <div class="seg" role="group" aria-label="Source type">
+            <button type="button" data-src="lf" aria-pressed="true">Glottal pulse (LF)</button>
+            <button type="button" data-src="closure">Closure transient only</button>
+          </div>
+          <p class="note">The LF pulse puts its excitation at the moment of closure. Closure transient only keeps just that event, so the sound is the tract ringing after each closure.</p>
+        </div>
+        <div class="field">
+          <div class="lab"><label for="bright">Closure sharpness</label><output id="bright-out" for="bright">50</output></div>
+          <input type="range" id="bright" min="0" max="100" step="1" value="50">
+        </div>
+        <div class="field">
+          <div class="lab"><label for="oq">Open quotient</label><output id="oq-out" for="oq">0.60</output></div>
+          <input type="range" id="oq" min="0.35" max="0.85" step="0.01" value="0.6">
+        </div>
+        <div class="field">
+          <div class="lab"><label for="breath">Breathiness</label><output id="breath-out" for="breath">5</output></div>
+          <input type="range" id="breath" min="0" max="100" step="1" value="5">
+        </div>
+        <div class="field">
+          <div class="lab"><label for="bw1">fR1 bandwidth</label><output id="bw1-out" for="bw1">70 Hz</output></div>
+          <input type="range" id="bw1" min="30" max="250" step="5" value="70">
+        </div>
+      </details>
+
+      <details>
+        <summary>Singer's formant cluster (advanced)</summary>
+        <div class="field">
+          <div class="lab"><label for="sfc">Cluster: unclustered ↔ clustered</label><output id="sfc-out" for="sfc">Unclustered</output></div>
+          <input type="range" id="sfc" min="0" max="100" step="1" value="0">
+          <p class="note">Draws fR3, fR4 and fR5 together into one band: about 2500 to 3500 Hz for non-treble voices, 3000 to 4000 Hz for treble. The band is shaded on the spectrum. Try the 4 kHz or 8 kHz view.</p>
+        </div>
+        <div class="field">
+          <div class="lab"><label for="f3">fR3 (unclustered)</label><output id="f3-out" for="f3">3100 Hz</output></div>
+          <input type="range" id="f3" min="1800" max="4200" step="10" value="3100">
+        </div>
+        <div class="field">
+          <div class="lab"><label for="f4">fR4 (unclustered)</label><output id="f4-out" for="f4">3900 Hz</output></div>
+          <input type="range" id="f4" min="2400" max="5000" step="10" value="3900">
+        </div>
+        <div class="field">
+          <div class="lab"><label for="f5">fR5 (unclustered)</label><output id="f5-out" for="f5">4600 Hz</output></div>
+          <input type="range" id="f5" min="3000" max="6000" step="10" value="4600">
+        </div>
+      </details>
+
+      <p class="keys"><kbd>Space</kbd> play or stop · <kbd>←</kbd> <kbd>→</kbd> semitone · <kbd>1</kbd>–<kbd>7</kbd> vowels · <kbd>P</kbd> play pattern</p>
+    </aside>
+  </div>
+
+  <section class="panel" aria-label="About">
+    <h2>About</h2>
+    <p class="note">Vowel Synth Lab was made by Chadley Ballantyne (Stetson University) for teaching acoustic registration in voice pedagogy. It follows the tradition of MADDE, Svante Granqvist's formant synthesizer, which many voice teachers have used for years to demonstrate harmonic and resonance interactions. The source is a Liljencrants-Fant glottal flow model (or, optionally, the closure transient alone), sent through five vocal-tract resonances. Built with Claude. Runs in Chrome or any current browser, with nothing to install.</p>
+  </section>
+</div>
+
+<script>
+"use strict";
+
+/* ===================== Source: LF glottal flow derivative =====================
+   One period of the derivative of glottal flow (Liljencrants-Fant). The main
+   excitation is the sharp negative peak at closure (te), followed by a short
+   return phase (ta). Tables are built band-limited for each pitch range, so high
+   notes do not alias. */
+const TABLE_N = 2048;
+const DFT_M = 4096;
+const K_ALL = 200;
+const LEVEL_TOP = [100, 200, 400, 800, 1600, 3200];
+
+function lfPeriod(te, tp, ta, M) {
+  let eps = 1 / ta;
+  for (let i = 0; i < 60; i++) eps = (1 - Math.exp(-eps * (1 - te))) / ta;
+  const wg = Math.PI / tp;
+  const tail = Math.exp(-eps * (1 - te));
+  const areaRet = -(1 / (eps * ta)) * ((1 - tail) / eps - (1 - te) * tail);
+  const areaOpen = (a) => {
+    const E0 = -1 / (Math.exp(a * te) * Math.sin(wg * te));
+    const I = (Math.exp(a * te) * (a * Math.sin(wg * te) - wg * Math.cos(wg * te)) + wg) / (a * a + wg * wg);
+    return E0 * I;
+  };
+  let lo = -60, hi = 120;
+  const flo = areaOpen(lo) + areaRet, fhi = areaOpen(hi) + areaRet;
+  let a = 0;
+  if (flo * fhi < 0) {
+    for (let i = 0; i < 80; i++) {
+      a = (lo + hi) / 2;
+      const fm = areaOpen(a) + areaRet;
+      if ((fm < 0) === (flo < 0)) lo = a; else hi = a;
+    }
+  }
+  const E0 = -1 / (Math.exp(a * te) * Math.sin(wg * te));
+  const d = new Float64Array(M);
+  for (let m = 0; m < M; m++) {
+    const t = m / M;
+    d[m] = t < te ? E0 * Math.exp(a * t) * Math.sin(wg * t)
+                  : -(1 / (eps * ta)) * (Math.exp(-eps * (t - te)) - tail);
+  }
+  return d;
+}
+function closurePeriod(te, ta, M) {
+  const sig = Math.max(ta, 0.004);
+  const d = new Float64Array(M);
+  for (let m = 0; m < M; m++) {
+    let dt = m / M - te;
+    if (dt > 0.5) dt -= 1; if (dt < -0.5) dt += 1;
+    d[m] = -Math.exp(-(dt * dt) / (2 * sig * sig));
+  }
+  return d;
+}
+const COS_M = new Float64Array(DFT_M), SIN_M = new Float64Array(DFT_M);
+for (let i = 0; i < DFT_M; i++) { COS_M[i] = Math.cos(2 * Math.PI * i / DFT_M); SIN_M[i] = Math.sin(2 * Math.PI * i / DFT_M); }
+
+function buildSource(kind, te, ta, sr) {
+  const d = kind === "closure" ? closurePeriod(te, ta, DFT_M) : lfPeriod(te, te * 0.75, ta, DFT_M);
+  const re = new Float64Array(K_ALL + 1), im = new Float64Array(K_ALL + 1), amps = new Float64Array(K_ALL + 1);
+  for (let k = 1; k <= K_ALL; k++) {
+    let r = 0, q = 0;
+    for (let m = 0, idx = 0; m < DFT_M; m++, idx = (idx + k) & (DFT_M - 1)) { r += d[m] * COS_M[idx]; q -= d[m] * SIN_M[idx]; }
+    re[k] = r * 2 / DFT_M; im[k] = q * 2 / DFT_M; amps[k] = Math.hypot(re[k], im[k]);
+  }
+  const tables = LEVEL_TOP.map((top) => {
+    const K = Math.max(1, Math.min(K_ALL, Math.floor(0.45 * sr / top)));
+    const tb = new Float32Array(TABLE_N + 1);
+    for (let n = 0; n < TABLE_N; n++) {
+      let v = 0;
+      for (let k = 1; k <= K; k++) {
+        const th = 2 * Math.PI * k * n / TABLE_N;
+        v += re[k] * Math.cos(th) - im[k] * Math.sin(th);
+      }
+      tb[n] = v;
+    }
+    tb[TABLE_N] = tb[0];
+    return tb;
+  });
+  return { tables, amps, te };
+}
+
+/* ===================== DSP voice: shared by the audio thread and the displays ===================== */
+class Voice {
+  constructor(sr) {
+    this.sr = sr;
+    this.phase = 0; this.vibPhase = 0;
+    this.lf0 = Math.log(262); this.f0T = 262; this.glide = 0.03;
+    this.F = [550, 950, 3100, 3900, 4600]; this.FT = this.F.slice();
+    this.BW = [70, 90, 130, 180, 220]; this.BWT = this.BW.slice();
+    this.A = new Float64Array(5); this.B = new Float64Array(5); this.C = new Float64Array(5);
+    this.Ao = new Float64Array(5); this.Bo = new Float64Array(5); this.Co = new Float64Array(5);
+    this.openDamp = 0.5;
+    this.y1 = new Float64Array(5); this.y2 = new Float64Array(5);
+    this.tables = null; this.levelTop = [100, 200, 400, 800, 1600, 3200]; this.te = 0.6;
+    this.noise = 0.02; this.vib = false; this.vibRate = 5.5; this.vibExt = 0.45;
+    this.amp = 0; this.ampT = 0; this.gain = 1; this.env = 0; this.relK = Math.exp(-1 / (0.3 * sr));
+    this.count = 0; this.seed = 22222; this.closures = null;
+    this.coefs();
+  }
+  set(p) {
+    if (p.f0 !== undefined) this.f0T = p.f0;
+    if (p.glide !== undefined) this.glide = p.glide;
+    if (p.F) this.FT = p.F.slice();
+    if (p.BW) this.BWT = p.BW.slice();
+    if (p.tables) this.tables = p.tables;
+    if (p.levelTop) this.levelTop = p.levelTop;
+    if (p.te !== undefined) this.te = p.te;
+    if (p.noise !== undefined) this.noise = p.noise;
+    if (p.vib !== undefined) this.vib = p.vib;
+    if (p.vibRate !== undefined) this.vibRate = p.vibRate;
+    if (p.vibExt !== undefined) this.vibExt = p.vibExt;
+    if (p.openDamp !== undefined) this.openDamp = p.openDamp;
+    if (p.amp !== undefined) this.ampT = p.amp;
+    if (p.gain !== undefined) this.gain = p.gain;
+  }
+  snap() { this.F = this.FT.slice(); this.BW = this.BWT.slice(); this.lf0 = Math.log(this.f0T); this.amp = this.ampT; this.coefs(); }
+  coefs() {
+    const T = 1 / this.sr;
+    for (let i = 0; i < 5; i++) {
+      const r = Math.exp(-Math.PI * this.BW[i] * T);
+      const c = -r * r, b = 2 * r * Math.cos(2 * Math.PI * this.F[i] * T);
+      this.B[i] = b; this.C[i] = c; this.A[i] = 1 - b - c;
+      const ro = Math.exp(-Math.PI * this.BW[i] * (1 + this.openDamp * (i === 0 ? 1.5 : 1)) * T);
+      const co = -ro * ro, bo = 2 * ro * Math.cos(2 * Math.PI * this.F[i] * T);
+      this.Bo[i] = bo; this.Co[i] = co; this.Ao[i] = 1 - bo - co;
+    }
+  }
+  rand() { this.seed = (this.seed * 1103515245 + 12345) & 0x7fffffff; return this.seed / 0x3fffffff - 1; }
+  render(out, n) {
+    const sr = this.sr;
+    const k16 = 1 - Math.exp(-16 / (sr * 0.015));
+    const kG = 1 - Math.exp(-1 / (sr * Math.max(this.glide, 0.002)));
+    const kA = 1 - Math.exp(-1 / (sr * 0.02));
+    const tabs = this.tables;
+    for (let s = 0; s < n; s++) {
+      if ((this.count++ & 15) === 0) {
+        for (let i = 0; i < 5; i++) { this.F[i] += (this.FT[i] - this.F[i]) * k16; this.BW[i] += (this.BWT[i] - this.BW[i]) * k16; }
+        this.coefs();
+      }
+      this.lf0 += (Math.log(this.f0T) - this.lf0) * kG;
+      let f = Math.exp(this.lf0);
+      if (this.vib) {
+        this.vibPhase += this.vibRate / sr; if (this.vibPhase >= 1) this.vibPhase -= 1;
+        f *= Math.pow(2, this.vibExt / 12 * Math.sin(2 * Math.PI * this.vibPhase));
+      }
+      const before = this.phase;
+      this.phase += f / sr;
+      if (this.phase >= 1) this.phase -= 1;
+      if (this.closures && ((before < this.te && this.phase >= this.te) || (this.phase < before && before < this.te))) this.closures.push(s);
+      let x = 0;
+      if (tabs) {
+        let L = 0; while (L < this.levelTop.length - 1 && f > this.levelTop[L]) L++;
+        const tb = tabs[L], N = tb.length - 1, pos = this.phase * N, i0 = pos | 0, fr = pos - i0;
+        x = (tb[i0] + (tb[i0 + 1] - tb[i0]) * fr) * 0.05;
+      }
+      if (this.noise > 0) x += this.rand() * this.noise * (this.phase < this.te ? 1 : 0.15) * 0.02;
+      const open = this.phase < this.te;
+      const A = open ? this.Ao : this.A, B = open ? this.Bo : this.B, C = open ? this.Co : this.C;
+      for (let i = 0; i < 5; i++) {
+        const y = A[i] * x + B[i] * this.y1[i] + C[i] * this.y2[i];
+        this.y2[i] = this.y1[i]; this.y1[i] = y; x = y;
+      }
+      this.amp += (this.ampT - this.amp) * kA;
+      const yv = x * this.gain * this.amp, ay = Math.abs(yv);
+      this.env = ay > this.env ? ay : this.env * this.relK;
+      const lim = this.env > 0.6 ? 0.6 / this.env : 1;
+      out[s] = Math.tanh(yv * lim);
+    }
+  }
+}
+
+const PROC_SRC = `
+class VoiceProc extends AudioWorkletProcessor {
+  constructor() { super(); this.v = new Voice(sampleRate); this.port.onmessage = (e) => this.v.set(e.data); }
+  process(inputs, outputs) {
+    const out = outputs[0];
+    this.v.render(out[0], out[0].length);
+    for (let c = 1; c < out.length; c++) out[c].set(out[0]);
+    return true;
+  }
+}
+registerProcessor('voice-proc', VoiceProc);
+`;
+
+/* ===================== Vowel data (approximate sung values, Hz) ===================== */
+const VOWELS = {
+  treble: { i: [310, 2700], e: [460, 2400], E: [620, 2200], a: [850, 1250], O: [640, 980], o: [550, 950], u: [380, 900], F345: [3100, 3900, 4600] },
+  low:    { i: [280, 2250], e: [400, 2000], E: [540, 1800], a: [720, 1100], O: [560, 860], o: [460, 820], u: [310, 820], F345: [2550, 3400, 4200] }
+};
+const VOWEL_KEYS = ["i", "e", "E", "a", "O", "o", "u"];
+
+/* ===================== State and helpers ===================== */
+const state = {
+  midi: 60, voice: "treble", vowel: "o", f1: 550, f2: 950, f3: 3100, f4: 3900, f5: 4600, sfc: 0,
+  track: "fixed", vib: false, vol: 0.6, bright: 50, oq: 0.6, breath: 5, bw1: 70,
+  src: "lf", range: 4000, playing: false,
+  vibRate: 5.5, vibExt: 0.45, reg: 30, decay: 35
+};
+const NAMES = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
+const hzOf = (m) => 440 * Math.pow(2, (m - 69) / 12);
+const midiOf = (hz) => 69 + 12 * Math.log2(hz / 440);
+function noteName(m) {
+  const r = Math.round(m), cents = Math.round((m - r) * 100);
+  const n = NAMES[((r % 12) + 12) % 12] + (Math.floor(r / 12) - 1);
+  return cents === 0 ? n : n + (cents > 0 ? " +" : " ") + cents + "¢";
+}
+const noteRound = (hz) => { const m = Math.round(midiOf(hz)); return NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1); };
+const f0 = () => hzOf(state.midi);
+function effF1() {
+  const fo = f0();
+  if (state.track === "h1") return Math.max(state.f1, fo * 1.06);
+  if (state.track === "h2") return Math.max(state.f1, 2 * fo * 1.03);
+  return state.f1;
+}
+const CLUSTER = { treble: [3100, 3450, 3850], low: [2600, 2900, 3250] };
+const CLUSTER_BAND = { treble: [3000, 4000], low: [2500, 3500] };
+function formants() {
+  const c = state.sfc / 100, T = CLUSTER[state.voice];
+  const mix = (a, b) => a * Math.pow(b / a, c);
+  return [effF1(), state.f2, mix(state.f3, T[0]), mix(state.f4, T[1]), mix(state.f5, T[2])];
+}
+const decayScale = () => 0.6 * Math.pow(4, state.decay / 100);
+function bandwidths() { const k = decayScale(), n = 1 - 0.35 * state.sfc / 100; return [state.bw1 * k, 90 * k, 130 * k * n, 180 * k * n, 220 * k * n]; }
+const openDampOf = () => 0.15 + 1.6 * (state.reg / 100);
+const taOf = () => 0.04 - 0.034 * (state.bright / 100);
+// Open when fR1 sits on the same piano key as H2 (nearest note) or higher.
+function classify(ratio, F1, fo) {
+  if (Math.round(midiOf(F1)) >= Math.round(midiOf(2 * fo))) return ["open", "Open"];
+  if (ratio >= 1.25) return ["close", "Close"];
+  if (ratio >= 0.9) return ["whoop", "Whoop"];
+  return ["over", "H1 above fR1"];
+}
+
+let srcSR = 48000;
+let SRC = buildSource(state.src, state.oq, taOf(), srcSR);
+function rebuildSource() { SRC = buildSource(state.src, state.oq, taOf(), srcSR); sendSource(); }
+
+/* ===================== Audio ===================== */
+let ctx = null, node = null, comp = null, liveVoice = null, gainCal = 1;
+function calibrate(sr) {
+  const s = buildSource("lf", 0.6, 0.023, sr);
+  const v = new Voice(sr);
+  v.set({ f0: 262, F: [850, 1250, 3100, 3900, 4600], BW: [70, 90, 130, 180, 220], tables: s.tables, levelTop: LEVEL_TOP, te: 0.6, noise: 0, amp: 1, gain: 1 });
+  v.snap();
+  const buf = new Float32Array(Math.round(sr * 0.2));
+  v.render(buf, buf.length);
+  let peak = 0;
+  for (let i = buf.length >> 1; i < buf.length; i++) peak = Math.max(peak, Math.abs(Math.atanh(Math.max(-0.999999, Math.min(0.999999, buf[i])))));
+  return 0.35 / (peak || 1);
+}
+function params(extra) {
+  return Object.assign({
+    f0: f0(), F: formants(), BW: bandwidths(), vib: state.vib, te: state.oq,
+    vibRate: state.vibRate, vibExt: state.vibExt, openDamp: openDampOf(),
+    noise: state.breath / 100, gain: gainCal * state.vol * 1.6, amp: state.playing ? 1 : 0
+  }, extra || {});
+}
+function send(extra) {
+  const msg = params(extra);
+  if (node) node.port.postMessage(msg);
+  if (liveVoice) liveVoice.set(msg);
+}
+function sendSource() {
+  const msg = { tables: SRC.tables, levelTop: LEVEL_TOP, te: SRC.te };
+  if (node) node.port.postMessage(msg);
+  if (liveVoice) liveVoice.set(msg);
+}
+async function startAudio() {
+  if (!ctx) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: "interactive" });
+    srcSR = ctx.sampleRate;
+    gainCal = calibrate(srcSR);
+    SRC = buildSource(state.src, state.oq, taOf(), srcSR);
+    comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -10; comp.ratio.value = 6; comp.attack.value = 0.003; comp.release.value = 0.15;
+    comp.connect(ctx.destination);
+    try {
+      const code = Voice.toString() + "\n" + PROC_SRC;
+      const url = URL.createObjectURL(new Blob([code], { type: "text/javascript" }));
+      await ctx.audioWorklet.addModule(url);
+      node = new AudioWorkletNode(ctx, "voice-proc", { outputChannelCount: [2] });
+      node.connect(comp);
+    } catch (err) {
+      liveVoice = new Voice(srcSR);
+      const sp = ctx.createScriptProcessor(1024, 0, 2);
+      sp.onaudioprocess = (e) => {
+        const L = e.outputBuffer.getChannelData(0);
+        liveVoice.render(L, L.length);
+        e.outputBuffer.getChannelData(1).set(L);
+      };
+      sp.connect(comp);
+    }
+    sendSource();
+  }
+  if (ctx.state !== "running") await ctx.resume();
+}
+const $ = (id) => document.getElementById(id);
+const playBtn = $("play"), statusEl = $("status");
+async function setPlaying(on) {
+  try {
+    if (on) await startAudio();
+    state.playing = on;
+    playBtn.textContent = on ? "Stop" : "Play";
+    playBtn.classList.toggle("on", on);
+    statusEl.textContent = "";
+    send();
+  } catch (e) {
+    statusEl.textContent = "Audio could not start. Click Play again, or check that this tab is allowed to play sound.";
+  }
+}
+playBtn.addEventListener("click", () => setPlaying(!state.playing));
+
+/* ===================== Shared drawing helpers ===================== */
+function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function fitCanvas(c) {
+  const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const g = c.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return [g, w, h];
+}
+const SR_VIEW = 48000;
+function tractMag(f, F, BW) {
+  const T = 1 / SR_VIEW, w = 2 * Math.PI * f * T;
+  let mag = 1;
+  for (let i = 0; i < 5; i++) {
+    const r = Math.exp(-Math.PI * BW[i] * T);
+    const c = -r * r, b = 2 * r * Math.cos(2 * Math.PI * F[i] * T), a = 1 - b - c;
+    mag *= a / Math.hypot(1 - b * Math.cos(w) - c * Math.cos(2 * w), b * Math.sin(w) + c * Math.sin(2 * w));
+  }
+  return mag;
+}
+function harmonicLevels(fo, fmax) {
+  const F = formants(), BW = bandwidths();
+  const kmax = Math.min(K_ALL, Math.floor(fmax / fo));
+  const amps = []; let amax = 0;
+  for (let k = 1; k <= kmax; k++) { const a = SRC.amps[k] * tractMag(k * fo, F, BW); amps[k] = a; if (a > amax) amax = a; }
+  const db = [];
+  for (let k = 1; k <= kmax; k++) db[k] = 20 * Math.log10(amps[k] / amax);
+  return { kmax, db };
+}
+
+/* ===================== Keyboard display ===================== */
+const kbd = $("kbd");
+const KB_LO = 36, KB_HI = 103;
+const isBlack = (m) => [1, 3, 6, 8, 10].includes(((m % 12) + 12) % 12);
+let KB = null;
+function layoutKeys(w) {
+  const whites = [];
+  for (let m = KB_LO; m <= KB_HI; m++) if (!isBlack(m)) whites.push(m);
+  const ww = w / whites.length;
+  const keys = {}, center = {};
+  whites.forEach((m, i) => { keys[m] = { x: i * ww, w: ww, black: false }; center[m] = i * ww + ww / 2; });
+  for (let m = KB_LO; m <= KB_HI; m++) if (isBlack(m)) {
+    const bx = keys[m - 1].x + ww; const bw = ww * 0.6;
+    keys[m] = { x: bx - bw / 2, w: bw, black: true }; center[m] = bx;
+  }
+  return { keys, center, ww };
+}
+function xOfMidi(mf) {
+  const c = KB.center;
+  if (mf <= KB_LO) return c[KB_LO] + (mf - KB_LO) * KB.ww / 2;
+  if (mf >= KB_HI) return c[KB_HI] + (mf - KB_HI) * KB.ww / 2;
+  const i = Math.floor(mf), fr = mf - i;
+  return c[i] + (c[i + 1] - c[i]) * fr;
+}
+function midiOfX(x) {
+  const c = KB.center;
+  if (x <= c[KB_LO]) return KB_LO + (x - c[KB_LO]) / (KB.ww / 2);
+  for (let m = KB_LO; m < KB_HI; m++) if (x <= c[m + 1]) return m + (x - c[m]) / (c[m + 1] - c[m]);
+  return KB_HI + (x - c[KB_HI]) / (KB.ww / 2);
+}
+const xOfHz = (hz) => xOfMidi(midiOf(hz));
+let kbGeom = { stripH: 0, keyTop: 0, h: 0 };
+
+function drawKeyboard() {
+  const [g, w, h] = fitCanvas(kbd);
+  KB = layoutKeys(w);
+  const stripH = Math.round(h * 0.5), keyTop = stripH + 8, keyH = h - keyTop - 2;
+  kbGeom = { stripH, keyTop, h, keyH };
+  const ink = cssVar("--scope-ink"), grid = cssVar("--scope-grid"), curveCol = cssVar("--curve");
+  const cH1 = cssVar("--h1"), cH2 = cssVar("--h2"), cHn = cssVar("--hn");
+  const fo = f0(), F = formants(), BW = bandwidths();
+  g.clearRect(0, 0, w, h);
+  g.font = "11px " + cssVar("--font-mono");
+
+  // octave grid
+  g.strokeStyle = grid; g.lineWidth = 1; g.fillStyle = ink; g.textAlign = "left"; g.textBaseline = "top";
+  for (let m = KB_LO; m <= KB_HI; m += 12) {
+    const x = Math.round(KB.keys[m].x) + 0.5;
+    g.beginPath(); g.moveTo(x, 0); g.lineTo(x, stripH); g.stroke();
+  }
+
+  // resonance curve on the keyboard's pitch scale
+  const top = 40, base = stripH;
+  const dbMin = -45;
+  const Yc = (db) => top + (Math.min(0, Math.max(dbMin, db)) / dbMin) * (base - top);
+  const vals = []; let cmax = 0;
+  for (let x = 0; x <= w; x += 2) { const m = tractMag(hzOf(midiOfX(x)), F, BW); vals.push(m); if (m > cmax) cmax = m; }
+  g.beginPath();
+  vals.forEach((m, i) => { const y = Yc(20 * Math.log10(m / cmax)); i ? g.lineTo(i * 2, y) : g.moveTo(0, y); });
+  g.lineTo(w, base); g.lineTo(0, base); g.closePath();
+  g.globalAlpha = 0.18; g.fillStyle = curveCol; g.fill(); g.globalAlpha = 1;
+  g.beginPath();
+  vals.forEach((m, i) => { const y = Yc(20 * Math.log10(m / cmax)); i ? g.lineTo(i * 2, y) : g.moveTo(0, y); });
+  g.strokeStyle = curveCol; g.lineWidth = 2; g.stroke();
+
+  // harmonics as stems, rising from the keys
+  const { kmax, db } = harmonicLevels(fo, hzOf(KB_HI + 0.5));
+  const dbMinH = -50;
+  const Yh = (d) => top + (Math.min(0, Math.max(dbMinH, d)) / dbMinH) * (base - top);
+  const hColor = (k) => (k === 1 ? cH1 : k === 2 ? cH2 : cHn);
+  for (let k = kmax; k >= 1; k--) {
+    const x = xOfHz(k * fo);
+    g.strokeStyle = hColor(k); g.lineWidth = k <= 2 ? 4 : 2.5;
+    g.beginPath(); g.moveTo(x, keyTop - 2); g.lineTo(x, Yh(db[k])); g.stroke();
+    if (k <= 6) {
+      g.fillStyle = hColor(k); g.textAlign = "center"; g.textBaseline = "bottom";
+      g.font = (k <= 2 ? "600 12px " : "11px ") + cssVar("--font-mono");
+      g.fillText("H" + k, x, Math.max(36, Yh(db[k]) - 3));
+    }
+  }
+  g.font = "11px " + cssVar("--font-mono");
+
+  // keys
+  const hl = {};
+  for (let k = kmax; k >= 1; k--) { const m = Math.round(midiOf(k * fo)); if (m >= KB_LO && m <= KB_HI) hl[m] = k; }
+  const drawKey = (m) => {
+    const kk = KB.keys[m], kh = kk.black ? keyH * 0.62 : keyH;
+    const k = hl[m];
+    let fill = kk.black ? "#1c222c" : "#eef1f5";
+    if (k === 1) fill = cH1; else if (k === 2) fill = cH2; else if (k) fill = kk.black ? "#4a5a70" : "#c9d4e2";
+    g.fillStyle = fill;
+    g.fillRect(kk.x + (kk.black ? 0 : 0.5), keyTop, kk.w - (kk.black ? 0 : 1), kh);
+    if (!kk.black) { g.strokeStyle = "#8a96a8"; g.lineWidth = 1; g.strokeRect(kk.x + 0.5, keyTop + 0.5, kk.w - 1, kh - 1); }
+  };
+  for (let m = KB_LO; m <= KB_HI; m++) if (!isBlack(m)) drawKey(m);
+  for (let m = KB_LO; m <= KB_HI; m++) if (isBlack(m)) drawKey(m);
+  g.fillStyle = "#3a4250"; g.textAlign = "center"; g.textBaseline = "bottom";
+  for (let m = KB_LO; m <= KB_HI; m += 12) g.fillText("C" + (m / 12 - 1), KB.keys[m].x + KB.ww / 2, keyTop + keyH - 3);
+
+  // outline the key fR1 is nearest to, so students can read it as a note
+  const mR1 = Math.round(midiOf(F[0]));
+  if (mR1 >= KB_LO && mR1 <= KB_HI) {
+    const kk = KB.keys[mR1], kh = kk.black ? keyH * 0.62 : keyH;
+    g.strokeStyle = curveCol; g.lineWidth = 3;
+    g.strokeRect(kk.x + 1.5, keyTop + 1.5, kk.w - 3, kh - 3);
+    g.fillStyle = curveCol; g.globalAlpha = 0.18;
+    g.fillRect(kk.x + 1.5, keyTop + 1.5, kk.w - 3, kh - 3); g.globalAlpha = 1;
+  }
+
+  // resonance markers through strip and keys, with drag handles
+  const labs = ["fR1", "fR2", "fR3", "fR4", "fR5"];
+  for (let i = 0; i < 5; i++) {
+    const x = xOfHz(F[i]);
+    if (x < 0 || x > w) continue;
+    g.strokeStyle = curveCol; g.lineWidth = i === 0 ? 2.5 : 1.5;
+    g.setLineDash(i === 0 ? [] : [5, 4]);
+    g.beginPath(); g.moveTo(x, 20); g.lineTo(x, keyTop + keyH); g.stroke();
+    g.setLineDash([]);
+    if (i < 2) {
+      g.fillStyle = curveCol;
+      g.beginPath(); g.roundRect ? g.roundRect(x - 17, 2, 34, 18, 9) : g.rect(x - 17, 2, 34, 18); g.fill();
+      g.fillStyle = "#08111c"; g.textAlign = "center"; g.textBaseline = "middle"; g.font = "600 11px " + cssVar("--font-mono");
+      g.fillText(labs[i], x, 11.5);
+      g.font = "11px " + cssVar("--font-mono");
+    } else {
+      g.fillStyle = curveCol; g.textAlign = "center"; g.textBaseline = "top"; g.fillText(labs[i], x, 4);
+    }
+  }
+}
+
+/* keyboard interaction */
+let kbDrag = null;
+function kbHit(ev) {
+  const r = kbd.getBoundingClientRect();
+  return { x: ev.clientX - r.left, y: ev.clientY - r.top };
+}
+function keyAt(x, y) {
+  const { keyTop, keyH } = kbGeom;
+  if (y < keyTop) return null;
+  if (y < keyTop + keyH * 0.62) {
+    for (let m = KB_LO; m <= KB_HI; m++) { const k = KB.keys[m]; if (k.black && x >= k.x && x <= k.x + k.w) return m; }
+  }
+  for (let m = KB_LO; m <= KB_HI; m++) { const k = KB.keys[m]; if (!k.black && x >= k.x && x < k.x + k.w) return m; }
+  return null;
+}
+kbd.addEventListener("pointerdown", async (ev) => {
+  if (!KB) return;
+  const { x, y } = kbHit(ev);
+  const F = formants();
+  if (y < kbGeom.stripH + 4) {
+    const d1 = Math.abs(x - xOfHz(F[0])), d2 = Math.abs(x - xOfHz(F[1]));
+    if (Math.min(d1, d2) < 18) {
+      kbDrag = { type: d1 <= d2 ? "f1" : "f2" };
+      kbd.setPointerCapture(ev.pointerId);
+      return;
+    }
+    return;
+  }
+  const m = keyAt(x, y);
+  if (m === null) return;
+  kbDrag = { type: "key" };
+  kbd.setPointerCapture(ev.pointerId);
+  setMidi(m);
+  if (!state.playing) await setPlaying(true);
+});
+kbd.addEventListener("pointermove", (ev) => {
+  if (!kbDrag) return;
+  const { x, y } = kbHit(ev);
+  if (kbDrag.type === "key") {
+    const m = keyAt(x, Math.max(y, kbGeom.keyTop + kbGeom.keyH * 0.8));
+    if (m !== null && m !== state.midi) setMidi(m);
+  } else {
+    const hz = hzOf(midiOfX(x));
+    if (kbDrag.type === "f1") { state.f1 = Math.max(200, Math.min(1200, hz)); $("f1").value = state.f1; }
+    else { state.f2 = Math.max(600, Math.min(3000, hz)); $("f2").value = state.f2; }
+    refresh();
+  }
+});
+const endDrag = () => { kbDrag = null; };
+kbd.addEventListener("pointerup", endDrag);
+kbd.addEventListener("pointercancel", endDrag);
+
+/* ===================== Grand staff ===================== */
+const staffCv = $("staff");
+const SPELL = [[0, ""], [0, "♯"], [1, ""], [2, "♭"], [2, ""], [3, ""], [3, "♯"], [4, ""], [5, "♭"], [5, ""], [6, "♭"], [6, ""]];
+const LETTERS = "CDEFGAB";
+function spell(m) {
+  const pc = ((m % 12) + 12) % 12, [li, acc] = SPELL[pc], oct = Math.floor(m / 12) - 1;
+  return { step: oct * 7 + li, acc, name: LETTERS[li] + acc + oct };
+}
+function contStep(mf) {
+  const lo = Math.floor(mf), fr = mf - lo, a = spell(lo).step, b = spell(lo + 1).step;
+  return a + (b - a) * fr;
+}
+const CLEF_FONT = "'Noto Music', 'Bravura', 'Segoe UI Symbol', 'Apple Symbols', 'FreeSerif', serif";
+function drawGlyph(g, ch, x, top, bottom) {
+  g.font = "100px " + CLEF_FONT;
+  const m = g.measureText(ch);
+  const asc = m.actualBoundingBoxAscent || 70, desc = m.actualBoundingBoxDescent || 30;
+  const k = (bottom - top) / (asc + desc || 1);
+  g.font = (100 * k) + "px " + CLEF_FONT;
+  g.textAlign = "left"; g.textBaseline = "alphabetic";
+  g.fillText(ch, x, top + asc * k);
+}
+function drawStaff() {
+  const [g, w, h] = fitCanvas(staffCv);
+  const ink = cssVar("--ink"), muted = cssVar("--muted"), curveCol = cssVar("--curve");
+  const cH1 = cssVar("--h1"), cH2 = cssVar("--h2"), cHn = cssVar("--muted");
+  g.clearRect(0, 0, w, h);
+  const s = 11;
+  const yF5 = 84, yE4 = yF5 + 4 * s, yA3 = yE4 + 6 * s, yG2 = yA3 + 4 * s;
+  const left = 14, right = w - 14;
+  const trebleY = (st) => yE4 - (st - 30) * s / 2;
+  const bassY = (st) => yA3 - (st - 26) * s / 2;
+  const yOfStep = (st) => (st >= 27.5 ? trebleY(st) : bassY(st));
+
+  // staff lines, system bracket, clefs
+  g.strokeStyle = ink; g.lineWidth = 1;
+  for (let i = 0; i < 5; i++) {
+    g.beginPath(); g.moveTo(left, Math.round(yF5 + i * s) + 0.5); g.lineTo(right, Math.round(yF5 + i * s) + 0.5); g.stroke();
+    g.beginPath(); g.moveTo(left, Math.round(yA3 + i * s) + 0.5); g.lineTo(right, Math.round(yA3 + i * s) + 0.5); g.stroke();
+  }
+  g.lineWidth = 2;
+  g.beginPath(); g.moveTo(left, yF5); g.lineTo(left, yG2); g.stroke();
+  g.lineWidth = 1;
+  g.fillStyle = ink;
+  drawGlyph(g, "\u{1D11E}", left + 6, yF5 - 1.9 * s, yE4 + 1.7 * s);
+  drawGlyph(g, "\u{1D122}", left + 8, yA3 - 0.15 * s, yA3 + 3.1 * s);
+
+  const x0 = left + 70, x1 = right - 96;
+  // resonance lines at their exact pitch
+  const F = formants();
+  [[0, "fR1", []], [1, "fR2", [6, 4]]].forEach(([i, lab, dash]) => {
+    const mf = midiOf(F[i]);
+    const st = contStep(mf);
+    if (st > 46 || st < 12) return;
+    const y = yOfStep(st);
+    g.strokeStyle = curveCol; g.lineWidth = i === 0 ? 3 : 2; g.setLineDash(dash);
+    g.globalAlpha = 0.9;
+    g.beginPath(); g.moveTo(x0 - 18, y); g.lineTo(x1 + 8, y); g.stroke();
+    g.globalAlpha = 1; g.setLineDash([]); g.lineWidth = 1;
+    g.fillStyle = curveCol; g.font = "600 12px " + cssVar("--font-mono");
+    g.textAlign = "left"; g.textBaseline = "middle";
+    g.fillText(lab + " " + noteRound(F[i]), x1 + 14, y);
+  });
+
+  // harmonics as notes, left to right
+  const fo = f0();
+  const notes = [];
+  for (let k = 1; k <= 10; k++) {
+    const mf = midiOf(k * fo), m = Math.round(mf), sp = spell(m);
+    if (sp.step > 46) break;
+    notes.push({ k, m, sp, cents: Math.round((mf - m) * 100) });
+  }
+  const gap = Math.min(64, (x1 - x0) / Math.max(notes.length, 1));
+  notes.forEach((n, idx) => {
+    const x = x0 + gap * (idx + 0.5);
+    const st = n.sp.step, y = yOfStep(st);
+    const col = n.k === 1 ? cH1 : n.k === 2 ? cH2 : cHn;
+    // ledger lines
+    g.strokeStyle = ink; g.lineWidth = 1;
+    const ledger = (yy) => { g.beginPath(); g.moveTo(x - s * 1.1, Math.round(yy) + 0.5); g.lineTo(x + s * 1.1, Math.round(yy) + 0.5); g.stroke(); };
+    if (st >= 28) {
+      for (let l = 40; l <= st; l += 2) ledger(trebleY(l));
+      if (st <= 28) ledger(trebleY(28));
+    } else {
+      for (let l = 16; l >= st; l -= 2) ledger(bassY(l));
+    }
+    // notehead
+    g.fillStyle = col;
+    g.beginPath(); g.ellipse(x, y, s * 0.68, s * 0.47, -0.35, 0, 2 * Math.PI); g.fill();
+    if (n.sp.acc) {
+      g.font = (s * 1.7) + "px " + CLEF_FONT; g.textAlign = "right"; g.textBaseline = "middle";
+      g.fillText(n.sp.acc, x - s * 0.95, y);
+    }
+    // labels: harmonic number on top, note name on the bottom
+    g.textAlign = "center"; g.textBaseline = "alphabetic";
+    g.font = (n.k <= 2 ? "600 12px " : "12px ") + cssVar("--font-mono");
+    g.fillStyle = col; g.fillText("H" + n.k, x, 16);
+    g.fillStyle = muted; g.font = "11px " + cssVar("--font-mono");
+    g.fillText(n.sp.name, x, h - 8);
+  });
+}
+
+/* ===================== Linear spectrum ===================== */
+const spec = $("spec");
+function drawSpectrum() {
+  const [g, w, h] = fitCanvas(spec);
+  const fo = f0(), F = formants(), BW = bandwidths(), fmax = state.range;
+  const padL = 40, padR = 10, padT = 22, padB = 24, pw = w - padL - padR, ph = h - padT - padB;
+  const X = (f) => padL + f / fmax * pw;
+  const dbMin = -60;
+  const Y = (db) => padT + (Math.min(0, Math.max(dbMin, db)) / dbMin) * ph;
+  const ink = cssVar("--scope-ink"), grid = cssVar("--scope-grid"), curveCol = cssVar("--curve");
+  g.clearRect(0, 0, w, h);
+  g.font = "11px " + cssVar("--font-mono"); g.lineWidth = 1;
+  const stepHz = fmax <= 2000 ? 250 : fmax <= 4000 ? 500 : 1000;
+  g.strokeStyle = grid; g.fillStyle = ink; g.textAlign = "center"; g.textBaseline = "top";
+  for (let f = 0; f <= fmax; f += stepHz) {
+    g.beginPath(); g.moveTo(X(f) + 0.5, padT); g.lineTo(X(f) + 0.5, padT + ph); g.stroke();
+    g.fillText(f >= 1000 ? (f / 1000) + "k" : String(f), X(f), padT + ph + 6);
+  }
+  g.textAlign = "right"; g.textBaseline = "middle";
+  for (let db = 0; db >= dbMin; db -= 20) {
+    g.beginPath(); g.moveTo(padL, Y(db) + 0.5); g.lineTo(padL + pw, Y(db) + 0.5); g.stroke();
+    g.fillText(db + " dB", padL - 4, Y(db));
+  }
+  const curve = []; let cmax = 0;
+  for (let px = 0; px <= pw; px++) { const m = tractMag(Math.max(1, px / pw * fmax), F, BW); curve.push(m); if (m > cmax) cmax = m; }
+  const path = () => { g.beginPath(); curve.forEach((m, i) => { const y = Y(20 * Math.log10(m / cmax)); i ? g.lineTo(padL + i, y) : g.moveTo(padL, y); }); };
+  path(); g.lineTo(padL + pw, padT + ph); g.lineTo(padL, padT + ph); g.closePath();
+  g.globalAlpha = 0.16; g.fillStyle = curveCol; g.fill(); g.globalAlpha = 1;
+  path(); g.strokeStyle = curveCol; g.lineWidth = 2; g.stroke(); g.lineWidth = 1;
+  if (state.sfc > 0) {
+    const [b0, b1] = CLUSTER_BAND[state.voice];
+    if (b0 < fmax) {
+      const xa = X(b0), xb = X(Math.min(b1, fmax));
+      g.globalAlpha = 0.06 + 0.12 * state.sfc / 100; g.fillStyle = cssVar("--open"); g.fillRect(xa, padT, xb - xa, ph); g.globalAlpha = 1;
+      g.fillStyle = cssVar("--open"); g.textAlign = "left"; g.textBaseline = "top"; g.fillText("singer's formant region", xa + 4, padT + 4);
+    }
+  }
+  g.setLineDash([4, 4]); g.fillStyle = curveCol; g.textAlign = "center"; g.textBaseline = "bottom";
+  for (let i = 0; i < 5; i++) {
+    if (F[i] > fmax) continue;
+    g.beginPath(); g.moveTo(X(F[i]) + 0.5, padT); g.lineTo(X(F[i]) + 0.5, padT + ph); g.stroke();
+    g.fillText("fR" + (i + 1), X(F[i]), padT - 4);
+  }
+  g.setLineDash([]);
+  const { kmax, db } = harmonicLevels(fo, fmax);
+  const cH1 = cssVar("--h1"), cH2 = cssVar("--h2"), cHn = cssVar("--hn");
+  const thick = Math.max(2, Math.min(5, pw / Math.max(kmax, 1) * 0.25));
+  for (let k = 1; k <= kmax; k++) {
+    const x = X(k * fo), col = k === 1 ? cH1 : k === 2 ? cH2 : cHn;
+    g.strokeStyle = col; g.lineWidth = k <= 2 ? thick + 1 : thick;
+    g.beginPath(); g.moveTo(x, padT + ph); g.lineTo(x, Y(db[k])); g.stroke();
+    if (k <= 4 && pw / kmax > 22) { g.fillStyle = col; g.textBaseline = "bottom"; g.fillText("H" + k, x, Math.max(padT + 14, Y(db[k]) - 4)); }
+  }
+  g.lineWidth = 1;
+}
+
+/* ===================== Waveform ===================== */
+const wave = $("wave");
+function drawWave() {
+  const [g, w, h] = fitCanvas(wave);
+  const v = new Voice(SR_VIEW);
+  const viewSrc = buildSourceCached();
+  v.set(Object.assign(params({ vib: false, noise: 0, amp: 1, gain: 1 }), { tables: viewSrc.tables, levelTop: LEVEL_TOP, te: state.oq }));
+  v.snap();
+  v.closures = [];
+  const n = Math.round(SR_VIEW * 0.25), buf = new Float32Array(n);
+  v.render(buf, n);
+  const cl = v.closures.filter((i) => i > n * 0.5);
+  if (cl.length < 4) return;
+  const pre = Math.round((cl[1] - cl[0]) * 0.15);
+  const s0 = cl[0] - pre, s1 = cl[3] - pre;
+  let peak = 0; for (let i = s0; i < s1; i++) peak = Math.max(peak, Math.abs(buf[i])); peak = peak || 1;
+  const ink = cssVar("--scope-ink"), grid = cssVar("--scope-grid");
+  g.clearRect(0, 0, w, h);
+  const padL = 8, padR = 8, padT = 18, padB = 8, pw = w - padL - padR, ph = h - padT - padB, mid = padT + ph / 2;
+  const X = (i) => padL + (i - s0) / (s1 - s0) * pw;
+  g.strokeStyle = grid; g.lineWidth = 1;
+  g.beginPath(); g.moveTo(padL, mid + 0.5); g.lineTo(padL + pw, mid + 0.5); g.stroke();
+  g.font = "11px " + cssVar("--font-mono"); g.fillStyle = ink; g.textAlign = "center"; g.textBaseline = "top";
+  for (let c = 0; c < 3; c++) {
+    const x = X(cl[c]);
+    g.strokeStyle = cssVar("--h1"); g.setLineDash([3, 4]);
+    g.beginPath(); g.moveTo(x + 0.5, padT); g.lineTo(x + 0.5, padT + ph); g.stroke(); g.setLineDash([]);
+    g.fillStyle = cssVar("--h1"); g.fillText("closure", x, 2);
+  }
+  g.strokeStyle = cssVar("--curve"); g.lineWidth = 2; g.beginPath();
+  for (let i = s0; i <= s1; i++) { const x = X(i), y = mid - buf[i] / peak * (ph / 2) * 0.92; i === s0 ? g.moveTo(x, y) : g.lineTo(x, y); }
+  g.stroke();
+}
+let viewCache = { key: "", src: null };
+function buildSourceCached() {
+  const key = state.src + "|" + state.oq + "|" + state.bright;
+  if (viewCache.key !== key) viewCache = { key, src: buildSource(state.src, state.oq, taOf(), SR_VIEW) };
+  return viewCache.src;
+}
+
+/* ===================== Readout and refresh ===================== */
+function updateReadout() {
+  const fo = f0(), F1 = effF1(), ratio = F1 / fo;
+  $("r-f0").textContent = noteName(state.midi);
+  $("r-f0hz").textContent = Math.round(fo) + " Hz";
+  $("r-f1").textContent = noteRound(F1);
+  $("r-f1hz").textContent = Math.round(F1) + " Hz" + (state.track !== "fixed" && F1 > state.f1 + 1 ? " (tracking)" : "");
+  $("r-h2").textContent = noteRound(2 * fo);
+  $("r-h2hz").textContent = Math.round(2 * fo) + " Hz";
+  $("r-ratio").textContent = ratio.toFixed(2);
+  const [cls, label] = classify(ratio, F1, fo);
+  const keyGap = Math.round(midiOf(F1)) - Math.round(midiOf(2 * fo));
+  const gapTxt = keyGap === 0 ? "fR1 on the H2 key" : keyGap > 0 ? "fR1 " + keyGap + " key" + (keyGap > 1 ? "s" : "") + " above H2" : "fR1 " + (-keyGap) + " key" + (keyGap < -1 ? "s" : "") + " below H2";
+  const pill = $("r-timbre"); pill.className = "pill " + cls; pill.textContent = label;
+  const kp = $("k-timbre"); kp.className = "pill " + cls; kp.textContent = label;
+  $("k-ratio").textContent = "fR1 " + noteRound(F1) + " · H1 " + noteName(state.midi) + " · H2 " + noteRound(2 * fo) + " · " + gapTxt;
+  $("pitch-out").textContent = noteName(state.midi) + " · " + Math.round(fo) + " Hz";
+  $("f1-out").textContent = Math.round(state.f1) + " Hz";
+  $("f2-out").textContent = Math.round(state.f2) + " Hz";
+  { const Fx = formants(), c = state.sfc;
+    [3, 4, 5].forEach((n) => { const base = state["f" + n], eff = Fx[n - 1];
+      $("f" + n + "-out").textContent = Math.round(base) + " Hz" + (c > 0 ? " → " + Math.round(eff) : ""); });
+    $("sfc-out").textContent = c === 0 ? "Unclustered" : c < 40 ? "Slightly clustered" : c < 80 ? "Partly clustered" : "Clustered"; }
+  $("bw1-out").textContent = Math.round(state.bw1) + " Hz";
+  $("bright-out").textContent = state.bright;
+  $("oq-out").textContent = state.oq.toFixed(2);
+  $("breath-out").textContent = state.breath;
+  $("vrate-out").textContent = state.vibRate.toFixed(1) + " Hz";
+  $("vext-out").textContent = state.vibExt.toFixed(2) + " st";
+  $("reg-out").textContent = state.reg < 20 ? "Chest" : state.reg < 45 ? "Chest-leaning" : state.reg < 60 ? "Mixed" : state.reg < 80 ? "Head-leaning" : "Head";
+  $("decay-out").textContent = state.decay < 25 ? "Slow" : state.decay < 60 ? "Medium" : "Fast";
+}
+let drawPending = false;
+function redraw() {
+  if (drawPending) return;
+  drawPending = true;
+  requestAnimationFrame(() => { drawPending = false; drawKeyboard(); drawStaff(); drawSpectrum(); drawWave(); });
+}
+function refresh(extra) { updateReadout(); send(extra); redraw(); }
+
+/* ===================== Controls ===================== */
+const pitchEl = $("pitch");
+function setMidi(m, glide) {
+  state.midi = Math.max(36, Math.min(88, m));
+  pitchEl.value = state.midi;
+  refresh({ glide: glide === undefined ? 0.03 : glide });
+}
+pitchEl.addEventListener("input", () => setMidi(parseFloat(pitchEl.value)));
+$("pup").addEventListener("click", () => setMidi(Math.round(state.midi) + 1));
+$("pdown").addEventListener("click", () => setMidi(Math.round(state.midi) - 1));
+$("snap").addEventListener("change", (e) => { pitchEl.step = e.target.checked ? "1" : "0.01"; if (e.target.checked) setMidi(Math.round(state.midi)); });
+function pressGroup(sel, attr, val) { document.querySelectorAll(sel).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset[attr] === val))); }
+function applyVowel() {
+  const d = VOWELS[state.voice][state.vowel];
+  const hi = VOWELS[state.voice].F345;
+  state.f1 = d[0]; state.f2 = d[1]; state.f3 = hi[0]; state.f4 = hi[1]; state.f5 = hi[2];
+  $("f1").value = state.f1; $("f2").value = state.f2; $("f3").value = state.f3; $("f4").value = state.f4; $("f5").value = state.f5;
+  refresh();
+}
+document.querySelectorAll("[data-vowel]").forEach((b) => b.addEventListener("click", () => { state.vowel = b.dataset.vowel; pressGroup("[data-vowel]", "vowel", state.vowel); applyVowel(); }));
+document.querySelectorAll("[data-voice]").forEach((b) => b.addEventListener("click", () => { state.voice = b.dataset.voice; pressGroup("[data-voice]", "voice", state.voice); fillStart(); applyVowel(); }));
+document.querySelectorAll("[data-track]").forEach((b) => b.addEventListener("click", () => { state.track = b.dataset.track; pressGroup("[data-track]", "track", state.track); refresh(); }));
+document.querySelectorAll("[data-range]").forEach((b) => b.addEventListener("click", () => { state.range = parseInt(b.dataset.range, 10); pressGroup("[data-range]", "range", b.dataset.range); redraw(); }));
+document.querySelectorAll("[data-src]").forEach((b) => b.addEventListener("click", () => { state.src = b.dataset.src; pressGroup("[data-src]", "src", state.src); rebuildSource(); refresh(); }));
+let srcTimer = null;
+function sourceChanged() { clearTimeout(srcTimer); srcTimer = setTimeout(rebuildSource, 60); refresh(); }
+[["f1", "f1"], ["f2", "f2"], ["f3", "f3"], ["f4", "f4"], ["f5", "f5"], ["sfc", "sfc"], ["bw1", "bw1"], ["breath", "breath"]].forEach(([id, key]) => $(id).addEventListener("input", (e) => { state[key] = parseFloat(e.target.value); refresh(); }));
+$("bright").addEventListener("input", (e) => { state.bright = parseFloat(e.target.value); sourceChanged(); });
+$("oq").addEventListener("input", (e) => { state.oq = parseFloat(e.target.value); sourceChanged(); });
+$("vol").addEventListener("input", (e) => { state.vol = parseFloat(e.target.value); send(); });
+$("vib").addEventListener("change", (e) => { state.vib = e.target.checked; send(); });
+$("vrate").addEventListener("input", (e) => { state.vibRate = parseFloat(e.target.value); updateReadout(); send(); });
+$("vext").addEventListener("input", (e) => { state.vibExt = parseFloat(e.target.value); updateReadout(); send(); });
+$("decay").addEventListener("input", (e) => { state.decay = parseFloat(e.target.value); refresh(); });
+function applyRegister() {
+  const r = state.reg / 100;
+  state.oq = Math.round((0.45 + 0.35 * r) * 100) / 100;
+  state.bright = Math.round(75 - 55 * r);
+  $("oq").value = state.oq; $("bright").value = state.bright;
+  sourceChanged();
+}
+$("reg").addEventListener("input", (e) => { state.reg = parseFloat(e.target.value); applyRegister(); });
+
+/* scale player */
+const startSel = $("start");
+function fillStart() {
+  const lo = state.voice === "treble" ? 55 : 43, hi = state.voice === "treble" ? 72 : 60, def = state.voice === "treble" ? 60 : 48;
+  startSel.innerHTML = "";
+  for (let m = lo; m <= hi; m++) { const o = document.createElement("option"); o.value = m; o.textContent = noteName(m); if (m === def) o.selected = true; startSel.appendChild(o); }
+  showFirstNote();
+}
+fillStart();
+let timers = [];
+function stopPattern() { timers.forEach(clearTimeout); timers = []; $("runscale").textContent = "Play pattern"; }
+async function runPattern() {
+  if (timers.length) { stopPattern(); return; }
+  if (!state.playing) await setPlaying(true);
+  if (!state.playing) return;
+  const base = parseInt(startSel.value, 10), beat = 60 / parseInt($("tempo").value, 10) * 1000, kind = $("pattern").value;
+  let steps = [];
+  const upDown = (up) => up.concat(up.slice(0, -1).reverse()).map((s, i, a) => ({ m: base + s, d: (i === a.length - 1 || s === up[up.length - 1]) ? 2 : 1, g: 0.03 }));
+  if (kind === "scale") steps = upDown([0, 2, 4, 5, 7, 9, 11, 12]);
+  else if (kind === "five") steps = upDown([0, 2, 4, 5, 7]);
+  else if (kind === "bozeman") steps = [7, 9, 11, 9].map((s) => ({ m: base + s, d: 1, g: 0.03 }))
+    .concat([7, 5, 4, 2].map((s) => ({ m: base + s, d: 0.5, g: 0.03 })), [{ m: base, d: 2, g: 0.03 }]);
+  else if (kind === "leap") steps = [{ m: base, d: 2, g: 0.03 }, { m: base + 12, d: 3, g: 0.06 }, { m: base, d: 2, g: 0.06 }];
+  else steps = [{ m: base, d: 1, g: 0.03 }, { m: base + 12, d: 6, g: 4 * beat / 1000 }, { m: base, d: 5, g: 4 * beat / 1000 }];
+  $("runscale").textContent = "Stop pattern";
+  let t = 0;
+  steps.forEach((st) => { timers.push(setTimeout(() => setMidi(st.m, st.g), t)); t += st.d * beat; });
+  timers.push(setTimeout(() => { timers = []; $("runscale").textContent = "Play pattern"; }, t));
+}
+$("runscale").addEventListener("click", runPattern);
+function showFirstNote() {
+  const b = parseInt(startSel.value, 10), boz = $("pattern").value === "bozeman";
+  $("firstnote").textContent = boz ? "Key of " + noteName(b) + ". First note is 5: " + noteName(b + 7) + ". Top note is 7: " + noteName(b + 11) + "."
+                                   : "Key of " + noteName(b) + ". First note is 1: " + noteName(b) + ".";
+}
+["pattern", "start"].forEach((id) => $(id).addEventListener("change", showFirstNote));
+
+/* keyboard shortcuts */
+document.addEventListener("keydown", (e) => {
+  const t = e.target;
+  if (t.tagName === "SELECT" || (t.tagName === "INPUT" && t.type !== "range" && t.type !== "checkbox")) return;
+  if (e.code === "Space") { e.preventDefault(); setPlaying(!state.playing); }
+  else if (e.key === "ArrowRight" && t.type !== "range") { e.preventDefault(); setMidi(Math.round(state.midi) + 1); }
+  else if (e.key === "ArrowLeft" && t.type !== "range") { e.preventDefault(); setMidi(Math.round(state.midi) - 1); }
+  else if (/^[1-7]$/.test(e.key)) { const k = VOWEL_KEYS[parseInt(e.key, 10) - 1]; state.vowel = k; pressGroup("[data-vowel]", "vowel", k); applyVowel(); }
+  else if (e.key === "p" || e.key === "P") runPattern();
+});
+
+new ResizeObserver(() => redraw()).observe(kbd);
+new ResizeObserver(() => redraw()).observe(spec);
+window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", redraw);
+new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+new ResizeObserver(() => redraw()).observe($("staff"));
+if (document.fonts && document.fonts.load) document.fonts.load("40px 'Noto Music'", "\u{1D11E}").then(redraw, () => {});
+state.oq = Math.round((0.45 + 0.35 * state.reg / 100) * 100) / 100; state.bright = Math.round(75 - 55 * state.reg / 100);
+$("oq").value = state.oq; $("bright").value = state.bright;
+SRC = buildSource(state.src, state.oq, taOf(), srcSR);
+applyVowel();
+
+/* reset to the starting settings (volume and play state are kept) */
+const DEFAULTS = JSON.parse(JSON.stringify(state));
+const ctlEls = Array.from(document.querySelectorAll(".controls input, .controls select")).filter((el) => el.id && el.id !== "vol");
+const ctlInit = ctlEls.map((el) => [el, el.type === "checkbox" ? el.checked : el.value]);
+$("reset").addEventListener("click", () => {
+  stopPattern();
+  const keep = { playing: state.playing, vol: state.vol, range: state.range };
+  Object.assign(state, JSON.parse(JSON.stringify(DEFAULTS)), keep);
+  state.range = DEFAULTS.range;
+  ctlInit.forEach(([el, v]) => { if (el.type === "checkbox") el.checked = v; else el.value = v; });
+  pitchEl.step = $("snap").checked ? "1" : "0.01";
+  pressGroup("[data-voice]", "voice", state.voice); pressGroup("[data-vowel]", "vowel", state.vowel);
+  pressGroup("[data-track]", "track", state.track); pressGroup("[data-src]", "src", state.src);
+  pressGroup("[data-range]", "range", String(state.range));
+  fillStart();
+  rebuildSource();
+  refresh();
+});
+</script>
+</body>
+</html>
