@@ -201,7 +201,7 @@ details .field { margin-top: 8px; }
           <div class="rule close"><b>Close</b>fR1 between fo and 2fo. About 1.5 ripples.</div>
           <div class="rule open"><b>Open</b>fR1 at or above 2fo. 2 or more ripples.</div>
         </div>
-        <p class="note">Boundaries are approximate. The readout calls it whoop from fR1 = 0.9 to 1.25 × fo, close from 1.25 to 2, open once fR1 is on the same piano key as H2 or higher (fR1 is read at its nearest note). Below 0.9, H1 has passed above fR1.</p>
+        <p class="note">The readout reads fR1 at its nearest piano key. Whoop: fR1 on H1's key or a half step either side of it. Close: fR1 more than a half step above H1 but below H2's key. Open: fR1 on H2's key or higher. Further below H1, the label says H1 has passed above fR1.</p>
       </section>
     </div>
 
@@ -602,8 +602,10 @@ const taOf = () => 0.04 - 0.034 * (state.bright / 100);
 // Open when fR1 sits on the same piano key as H2 (nearest note) or higher.
 function classify(ratio, F1, fo) {
   if (Math.round(midiOf(F1)) >= Math.round(midiOf(2 * fo))) return ["open", "Open"];
-  if (ratio >= 1.25) return ["close", "Close"];
-  if (ratio >= 0.9) return ["whoop", "Whoop"];
+  // whoop when fR1's key is H1's key or a half step either side of it
+  const k1 = Math.round(midiOf(F1)) - Math.round(midiOf(fo));
+  if (k1 > 1) return ["close", "Close"];
+  if (k1 >= -1) return ["whoop", "Whoop"];
   return ["over", "H1 above fR1"];
 }
 
