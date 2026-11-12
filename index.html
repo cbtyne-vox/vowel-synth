@@ -590,10 +590,19 @@ function effF1() {
 }
 const CLUSTER = { treble: [3100, 3450, 3850], low: [2600, 2900, 3250] };
 const CLUSTER_BAND = { treble: [3000, 4000], low: [2500, 3500] };
+const F2_FOLLOW = 0.6;
 function formants() {
   const c = state.sfc / 100, T = CLUSTER[state.voice];
   const mix = (a, b) => a * Math.pow(b / a, c);
-  return [effF1(), state.f2, mix(state.f3, T[0]), mix(state.f4, T[1]), mix(state.f5, T[2])];
+  const F1 = effF1();
+  // when tracking raises fR1, fR2 rises with it, but less than 1:1 (the same mouth opening moves both)
+  const F2track = state.f2 * Math.pow(F1 / state.f1, F2_FOLLOW);
+  // resonances never cross: each stays at least ~15% above the one below
+  const F2 = Math.max(F2track, F1 * 1.15);
+  const F3 = Math.max(mix(state.f3, T[0]), F2 * 1.15);
+  const F4 = Math.max(mix(state.f4, T[1]), F3 * 1.08);
+  const F5 = Math.max(mix(state.f5, T[2]), F4 * 1.08);
+  return [F1, F2, F3, F4, F5];
 }
 const decayScale = () => 0.6 * Math.pow(4, state.decay / 100);
 function bandwidths() { const k = decayScale(), n = 1 - 0.35 * state.sfc / 100; return [state.bw1 * k, 90 * k, 130 * k * n, 180 * k * n, 220 * k * n]; }
@@ -1115,7 +1124,7 @@ function updateReadout() {
   $("k-ratio").textContent = "fR1 " + noteRound(F1) + " · H1 " + noteName(state.midi) + " · H2 " + noteRound(2 * fo) + " · " + gapTxt;
   $("pitch-out").textContent = noteName(state.midi) + " · " + Math.round(fo) + " Hz";
   $("f1-out").textContent = Math.round(state.f1) + " Hz";
-  $("f2-out").textContent = Math.round(state.f2) + " Hz";
+  { const e2 = formants()[1]; $("f2-out").textContent = Math.round(state.f2) + " Hz" + (Math.abs(e2 - state.f2) > 1 ? " → " + Math.round(e2) : ""); }
   { const Fx = formants(), c = state.sfc;
     [3, 4, 5].forEach((n) => { const base = state["f" + n], eff = Fx[n - 1];
       $("f" + n + "-out").textContent = Math.round(base) + " Hz" + (c > 0 ? " → " + Math.round(eff) : ""); });
