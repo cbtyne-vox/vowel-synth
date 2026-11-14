@@ -590,15 +590,13 @@ function effF1() {
 }
 const CLUSTER = { treble: [3100, 3450, 3850], low: [2600, 2900, 3250] };
 const CLUSTER_BAND = { treble: [3000, 4000], low: [2500, 3500] };
-const F2_FOLLOW = 0.6;
 function formants() {
   const c = state.sfc / 100, T = CLUSTER[state.voice];
   const mix = (a, b) => a * Math.pow(b / a, c);
   const F1 = effF1();
-  // when tracking raises fR1, fR2 rises with it, but less than 1:1 (the same mouth opening moves both)
-  const F2track = state.f2 * Math.pow(F1 / state.f1, F2_FOLLOW);
-  // resonances never cross: each stays at least ~15% above the one below
-  const F2 = Math.max(F2track, F1 * 1.15);
+  // fR2 stays where it is set. It moves only when a tracking fR1 comes close, and then only upward,
+  // just enough to keep the two from crossing: each resonance stays at least ~15% above the one below.
+  const F2 = Math.max(state.f2, F1 * 1.15);
   const F3 = Math.max(mix(state.f3, T[0]), F2 * 1.15);
   const F4 = Math.max(mix(state.f4, T[1]), F3 * 1.08);
   const F5 = Math.max(mix(state.f5, T[2]), F4 * 1.08);
