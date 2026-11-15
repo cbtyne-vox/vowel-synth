@@ -263,8 +263,16 @@ details .field { margin-top: 8px; }
           <button type="button" data-track="fixed" aria-pressed="true">Fixed</button>
           <button type="button" data-track="h1">Track H1</button>
           <button type="button" data-track="h2">Track H2</button>
+          <button type="button" data-track="h3" id="h3-btn" hidden>Close timbre</button>
         </div>
         <p class="note">Track H1 raises fR1 with the pitch once fo reaches it, the way a singer opens the vowel to keep whoop (Price). Track H2 keeps fR1 on 2fo, the yell or belt strategy.</p>
+        <div id="h3-ctl" hidden>
+          <div class="seg" role="group" aria-label="Where close timbre begins" style="margin-top: 6px;">
+            <button type="button" data-passaggio="bari" aria-pressed="true">Baritone (from F4)</button>
+            <button type="button" data-passaggio="tenor" aria-pressed="false">Tenor (from F♯4)</button>
+          </div>
+          <p class="note">Close timbre, for non-treble voices: from the start note up, fR1 sits between H1 and H2 so the voice stays out of open timbre. For [a], [ɔ], [o], [e] and [ɛ], fR1 is centered between H1 and H2. [u] raises fR1 only as far as it needs to. [i] keeps fR1 just above H1, or it starts to sound like [ɛ]. The front vowels also bring fR2 down a little as fR1 rises; the back vowels keep fR2 where it is. Below the start note it behaves like Fixed.</p>
+        </div>
         <label class="check"><input type="checkbox" id="modvowel"> Modify front vowels</label>
         <p class="note">When tracking raises fR1, front vowels ([i], [e], [ɛ]) also bring fR2 down toward the middle of the vowel space, as singers do when they modify a vowel high in the range. Without it, fR2 stays where it is set and only moves up to stay clear of fR1.</p>
       </div>
@@ -570,7 +578,7 @@ const VOWEL_KEYS = ["i", "e", "E", "a", "O", "o", "u"];
 /* ===================== State and helpers ===================== */
 const state = {
   midi: 60, voice: "treble", vowel: "o", f1: 550, f2: 950, f3: 3100, f4: 3900, f5: 4600, sfc: 0,
-  track: "fixed", modvowel: false, vib: false, vol: 0.6, bright: 50, oq: 0.6, breath: 5, bw1: 70,
+  track: "fixed", passaggio: "bari", modvowel: false, vib: false, vol: 0.6, bright: 50, oq: 0.6, breath: 5, bw1: 70,
   src: "lf", range: 4000, playing: false,
   vibRate: 5.5, vibExt: 0.45, reg: 30, decay: 35
 };
@@ -584,10 +592,40 @@ function noteName(m) {
 }
 const noteRound = (hz) => { const m = Math.round(midiOf(hz)); return NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1); };
 const f0 = () => hzOf(state.midi);
+// Close timbre for non-treble voices, from the start note up (tuned by ear, Nov 2026):
+//  [a], [ɔ], [o], [e], [ɛ]: fR1 centered between H1 and H2 (√2·fo)
+//  [u]: fR1 raised only as far as needed to sit more than a whole step above H1 (and below H2)
+//  [i]: fR1 stays just above H1 (6%), so the vowel does not turn into [ɛ]
+//  front vowels also bring fR2 down as fR1 rises ([e], [ɛ] like "Modify front vowels"; [i] about half as much)
+//  back vowels keep their fR2. The vowel is read from the current fR1/fR2 settings (nearest preset).
+const CLOSE_START = { bari: 65, tenor: 66 };   // F4, F#4
+function closeBlend() {
+  // 0 below the start note, 1 from the start note up, easing in over the half step below it
+  if (state.track !== "h3" || state.voice !== "low") return 0;
+  return Math.min(1, Math.max(0, state.midi - (CLOSE_START[state.passaggio] - 1)));
+}
+const glide = (a, b, t) => a * Math.pow(b / a, t);
+function nearestVowel() {
+  const V = VOWELS[state.voice]; let best = "a", bd = Infinity;
+  for (const k of Object.keys(V)) {
+    if (k === "F345") continue;
+    const d = Math.log(state.f1 / V[k][0]) ** 2 + Math.log(state.f2 / V[k][1]) ** 2;
+    if (d < bd) { bd = d; best = k; }
+  }
+  return best;
+}
+function closeTarget() {
+  const fo = f0(), v = nearestVowel();
+  if (v === "i") return { f1: Math.max(state.f1, fo * 1.06), rate: 0.15 };
+  if (v === "u") return { f1: Math.min(Math.max(state.f1, fo * Math.pow(2, 2.5 / 12)), 2 * fo * Math.pow(2, -1 / 12)), rate: 0 };
+  return { f1: fo * Math.SQRT2, rate: (v === "e" || v === "E") ? MOD_RATE : 0 };
+}
 function effF1() {
   const fo = f0();
   if (state.track === "h1") return Math.max(state.f1, fo * 1.06);
   if (state.track === "h2") return Math.max(state.f1, 2 * fo * 1.03);
+  const b = closeBlend();
+  if (b > 0) return glide(state.f1, closeTarget().f1, b);
   return state.f1;
 }
 const CLUSTER = { treble: [3100, 3450, 3850], low: [2600, 2900, 3250] };
@@ -604,6 +642,12 @@ function formants() {
   let F2set = state.f2;
   if (state.modvowel && F1 > state.f1 && state.f2 > F2_MID[state.voice]) {
     F2set = Math.max(F2_MID[state.voice], state.f2 * Math.pow(state.f1 / F1, MOD_RATE));
+  }
+  // close timbre: front vowels bring fR2 down as fR1 rises; back vowels keep it
+  const bc = closeBlend();
+  if (bc > 0) {
+    const t = closeTarget();
+    if (t.rate > 0 && t.f1 > state.f1) F2set = Math.max(Math.min(state.f2, F2_MID.low), state.f2 * Math.pow(state.f1 / F1, t.rate));
   }
   const F2 = Math.max(F2set, F1 * 1.15);
   const F3 = Math.max(mix(state.f3, T[0]), F2 * 1.15);
@@ -1119,7 +1163,7 @@ function updateReadout() {
   $("r-f0").textContent = noteName(state.midi);
   $("r-f0hz").textContent = Math.round(fo) + " Hz";
   $("r-f1").textContent = noteRound(F1);
-  $("r-f1hz").textContent = Math.round(F1) + " Hz" + (state.track !== "fixed" && F1 > state.f1 + 1 ? " (tracking)" : "");
+  $("r-f1hz").textContent = Math.round(F1) + " Hz" + (state.track !== "fixed" && Math.abs(F1 - state.f1) > 1 ? " (tracking)" : "");
   $("r-h2").textContent = noteRound(2 * fo);
   $("r-h2hz").textContent = Math.round(2 * fo) + " Hz";
   $("r-ratio").textContent = ratio.toFixed(2);
@@ -1173,8 +1217,16 @@ function applyVowel() {
   refresh();
 }
 document.querySelectorAll("[data-vowel]").forEach((b) => b.addEventListener("click", () => { state.vowel = b.dataset.vowel; pressGroup("[data-vowel]", "vowel", state.vowel); applyVowel(); }));
-document.querySelectorAll("[data-voice]").forEach((b) => b.addEventListener("click", () => { state.voice = b.dataset.voice; pressGroup("[data-voice]", "voice", state.voice); fillStart(); applyVowel(); }));
-document.querySelectorAll("[data-track]").forEach((b) => b.addEventListener("click", () => { state.track = b.dataset.track; pressGroup("[data-track]", "track", state.track); refresh(); }));
+function syncCloseCtl() {
+  // the close strategy is for non-treble voices only
+  $("h3-btn").hidden = state.voice !== "low";
+  if (state.voice !== "low" && state.track === "h3") { state.track = "fixed"; pressGroup("[data-track]", "track", state.track); }
+  $("h3-ctl").hidden = state.track !== "h3";
+  pressGroup("[data-passaggio]", "passaggio", state.passaggio);
+}
+document.querySelectorAll("[data-voice]").forEach((b) => b.addEventListener("click", () => { state.voice = b.dataset.voice; pressGroup("[data-voice]", "voice", state.voice); syncCloseCtl(); fillStart(); applyVowel(); }));
+document.querySelectorAll("[data-passaggio]").forEach((b) => b.addEventListener("click", () => { state.passaggio = b.dataset.passaggio; syncCloseCtl(); refresh(); }));
+document.querySelectorAll("[data-track]").forEach((b) => b.addEventListener("click", () => { state.track = b.dataset.track; pressGroup("[data-track]", "track", state.track); syncCloseCtl(); refresh(); }));
 document.querySelectorAll("[data-range]").forEach((b) => b.addEventListener("click", () => { state.range = parseInt(b.dataset.range, 10); pressGroup("[data-range]", "range", b.dataset.range); redraw(); }));
 document.querySelectorAll("[data-src]").forEach((b) => b.addEventListener("click", () => { state.src = b.dataset.src; pressGroup("[data-src]", "src", state.src); rebuildSource(); refresh(); }));
 let srcTimer = null;
@@ -1270,6 +1322,7 @@ $("reset").addEventListener("click", () => {
   pressGroup("[data-voice]", "voice", state.voice); pressGroup("[data-vowel]", "vowel", state.vowel);
   pressGroup("[data-track]", "track", state.track); pressGroup("[data-src]", "src", state.src);
   pressGroup("[data-range]", "range", String(state.range));
+  syncCloseCtl();
   fillStart();
   rebuildSource();
   refresh();
