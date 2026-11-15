@@ -130,6 +130,8 @@ button[aria-pressed="true"] { background: var(--accent); border-color: var(--acc
 #play.on { background: #c0392b; border-color: #c0392b; }
 /* phone bar: stays at the bottom of the screen on small or touch screens */
 .mbar { display: none; }
+/* stop iPhone Safari's double-tap zoom when buttons are tapped quickly (pinch zoom still works) */
+html, button, input, select, label { touch-action: manipulation; }
 @media (max-width: 700px), (hover: none) and (pointer: coarse) {
   .mbar { display: flex; flex-direction: column; gap: 8px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
     padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); background: var(--panel); border-top: 1px solid var(--line);
@@ -1283,6 +1285,16 @@ function setMidi(m, glide) {
 pitchEl.addEventListener("input", () => setMidi(parseFloat(pitchEl.value)));
 $("pup").addEventListener("click", () => setMidi(Math.round(state.midi) + 1));
 $("pdown").addEventListener("click", () => setMidi(Math.round(state.midi) - 1));
+// iPhone Safari can still zoom on fast repeated taps; handle the tap ourselves so there is no double-tap gesture
+document.querySelectorAll(".mbar button, #pup, #pdown, .vowels button").forEach((b) => {
+  let sx = 0, sy = 0;
+  b.addEventListener("touchstart", (e) => { sx = e.touches[0].clientX; sy = e.touches[0].clientY; }, { passive: true });
+  b.addEventListener("touchend", (e) => {
+    const t = e.changedTouches[0];
+    if (Math.abs(t.clientX - sx) > 10 || Math.abs(t.clientY - sy) > 10) return;   // that was a scroll, not a tap
+    e.preventDefault(); b.click();
+  }, { passive: false });
+});
 $("mup").addEventListener("click", () => setMidi(Math.round(state.midi) + 1));
 $("mdown").addEventListener("click", () => setMidi(Math.round(state.midi) - 1));
 $("snap").addEventListener("change", (e) => { pitchEl.step = e.target.checked ? "1" : "0.01"; if (e.target.checked) setMidi(Math.round(state.midi)); });
