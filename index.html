@@ -271,7 +271,7 @@ details .field { margin-top: 8px; }
             <button type="button" data-passaggio="bari" aria-pressed="true">Baritone (from F4)</button>
             <button type="button" data-passaggio="tenor" aria-pressed="false">Tenor (from F♯4)</button>
           </div>
-          <p class="note">Close timbre, for non-treble voices: from the start note up, fR1 sits between H1 and H2 so the voice stays out of open timbre. For [ɔ], [o], [e] and [ɛ], fR1 is centered between H1 and H2. [u] raises fR1 only as far as it needs to. [a] brings fR1 down a little and fR2 up a little. [i] keeps fR1 just above H1, or it starts to sound like [ɛ]. [e] and [ɛ] also bring fR2 down a little as fR1 rises; the back vowels keep fR2 where it is. Below the start note it behaves like Fixed.</p>
+          <p class="note">Close timbre, for non-treble voices: from the start note up, fR1 sits between H1 and H2 so the voice stays out of open timbre. For [ɔ], [o], [e] and [ɛ], fR1 is centered between H1 and H2. [u] raises fR1 only as far as it needs to. [a] brings fR1 down a little and fR2 up a little. [i] keeps fR1 just above H1, or it starts to sound like [ɛ], and it starts tracking earlier, as soon as H1 gets close to fR1, so it never reaches whoop. [e] and [ɛ] also bring fR2 down a little as fR1 rises; the back vowels keep fR2 where it is. Below the start note it behaves like Fixed.</p>
         </div>
         <label class="check"><input type="checkbox" id="modvowel"> Modify front vowels</label>
         <p class="note">When tracking raises fR1, front vowels ([i], [e], [ɛ]) also bring fR2 down toward the middle of the vowel space, as singers do when they modify a vowel high in the range. Without it, fR2 stays where it is set and only moves up to stay clear of fR1.</p>
@@ -571,7 +571,7 @@ registerProcessor('voice-proc', VoiceProc);
 /* ===================== Vowel data (approximate sung values, Hz) ===================== */
 const VOWELS = {
   treble: { i: [310, 2700], e: [460, 2400], E: [620, 2200], a: [850, 1250], O: [640, 980], o: [550, 950], u: [380, 900], F345: [3100, 3900, 4600] },
-  low:    { i: [280, 2250], e: [400, 2000], E: [540, 1800], a: [720, 1100], O: [560, 860], o: [460, 820], u: [310, 820], F345: [2550, 3400, 4200] }
+  low:    { i: [330, 2250], e: [400, 2000], E: [540, 1800], a: [720, 1100], O: [560, 860], o: [460, 820], u: [310, 820], F345: [2550, 3400, 4200] }
 };
 const VOWEL_KEYS = ["i", "e", "E", "a", "O", "o", "u"];
 
@@ -597,7 +597,8 @@ const f0 = () => hzOf(state.midi);
 //      (Chadley's hand-set values from the F4 and G4 screenshots, about 630-640 / 1145-1165)
 //  [ɔ], [o], [e], [ɛ]: fR1 centered between H1 and H2 (√2·fo)
 //  [u]: fR1 raised only as far as needed to sit more than a whole step above H1 (and below H2)
-//  [i]: fR1 stays just above H1 (11%; hand-set ~393 F4, ~430 G4, ~490 A4), fR2 kept, so it does not turn into [ɛ]
+//  [i]: fR1 stays just above H1 (11%; hand-set ~393 F4, ~430 G4, ~490 A4), fR2 kept, so it does not turn into [ɛ].
+//      [i] ignores the start note: it tracks as soon as H1 comes within 11% of fR1 (about D4 with fR1 330), so it never whoops.
 //  front vowels also bring fR2 down as fR1 rises ([e], [ɛ] like "Modify front vowels"; [i] keeps its fR2)
 //  back vowels keep their fR2. The vowel is read from the current fR1/fR2 settings (nearest preset).
 const CLOSE_START = { bari: 65, tenor: 66 };   // F4, F#4
@@ -628,6 +629,8 @@ function effF1() {
   const fo = f0();
   if (state.track === "h1") return Math.max(state.f1, fo * 1.06);
   if (state.track === "h2") return Math.max(state.f1, 2 * fo * 1.03);
+  // [i] starts tracking on its own, before H1 can reach fR1 (no whoop), whatever the start note
+  if (state.track === "h3" && state.voice === "low" && nearestVowel() === "i") return Math.max(state.f1, fo * 1.11);
   const b = closeBlend();
   if (b > 0) return glide(state.f1, closeTarget().f1, b);
   return state.f1;
