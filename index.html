@@ -92,6 +92,14 @@ canvas { display: block; width: 100%; }
 .staffwrap { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px; overflow-x: auto; }
 .kbdscroll { background: var(--scope-bg); border-radius: 8px; padding: 6px; overflow-x: auto; }
 #kbd { height: 300px; min-width: 980px; touch-action: none; cursor: pointer; }
+.kbview { display: block; width: 100%; margin: 8px 0 0; }
+.kbview[hidden] { display: none; }
+.kbview-label { font-size: 12px; color: var(--muted); margin: 2px 0 0; }
+@media (max-width: 700px) {
+  #kbd { height: 240px; min-width: 760px; }
+  #staff { min-width: 0; }
+  .kbdscroll { scrollbar-width: none; }
+}
 #wave { height: 170px; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
@@ -120,6 +128,22 @@ button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px s
 button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
 #play { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; padding: 8px 18px; font-size: 15px; }
 #play.on { background: #c0392b; border-color: #c0392b; }
+/* phone bar: stays at the bottom of the screen on small or touch screens */
+.mbar { display: none; }
+@media (max-width: 700px), (hover: none) and (pointer: coarse) {
+  .mbar { display: flex; flex-direction: column; gap: 8px; position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom)); background: var(--panel); border-top: 1px solid var(--line);
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.08); }
+  .mbar .mrow { display: flex; align-items: center; gap: 8px; }
+  .mbar button { font-size: 16px; padding: 10px 14px; min-height: 44px; }
+  .mbar .mvowels { gap: 4px; }
+  .mbar .mvowels button { flex: 1; min-width: 0; padding: 6px 0; min-height: 40px; font-family: var(--font-mono); font-size: 17px; }
+  .mbar #mplay { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; min-width: 76px; }
+  .mbar #mplay.on { background: #c0392b; border-color: #c0392b; }
+  .mbar .mnote { flex: 1; text-align: center; font-family: var(--font-mono); font-size: 15px; }
+  .mbar .pill { font-size: 13px; padding: 3px 10px; }
+  body { padding-bottom: 136px; }
+}
 .vowels button { font-family: var(--font-mono); min-width: 44px; font-size: 16px; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .seg button { border: 0; border-radius: 0; background: transparent; }
@@ -146,7 +170,9 @@ details .field { margin-top: 8px; }
       <div class="row" style="gap: 12px;"><h2>Keyboard: harmonics and resonances</h2><span class="pill open" id="k-timbre">Open</span><span class="note" id="k-ratio"></span></div>
       <span class="note">Click or drag across the keys to sing a pitch. Drag the fR1 or fR2 handle to move a resonance.</span>
     </div>
-    <div class="kbdscroll"><canvas id="kbd" aria-label="Piano keyboard with harmonics and resonances marked"></canvas></div>
+    <div class="kbdscroll" id="kbdscroll"><canvas id="kbd" aria-label="Piano keyboard with harmonics and resonances marked"></canvas></div>
+    <input type="range" class="kbview" id="kbview" min="0" max="1000" value="0" aria-label="Slide to see lower or higher on the keyboard" hidden>
+    <p class="kbview-label" id="kbview-label" hidden>Slide to see lower or higher keys. The keyboard follows the pitch you sing.</p>
     <div class="legend">
       <span><i class="sw" style="background: var(--h1)"></i>H1 (the sung pitch)</span>
       <span><i class="sw" style="background: var(--h2)"></i>H2 (octave above)</span>
@@ -219,7 +245,7 @@ details .field { margin-top: 8px; }
 
       <div class="field">
         <div class="lab"><label for="pitch">Pitch</label><output id="pitch-out" for="pitch">C4 · 262 Hz</output></div>
-        <input type="range" id="pitch" min="36" max="88" step="1" value="60">
+        <input type="range" id="pitch" min="36" max="89" step="1" value="60">
         <div class="row">
           <button type="button" id="pdown" aria-label="Down a semitone">−1 st</button>
           <button type="button" id="pup" aria-label="Up a semitone">+1 st</button>
@@ -314,7 +340,7 @@ details .field { margin-top: 8px; }
       </div>
 
       <div class="field">
-        <label class="check"><input type="checkbox" id="vib"> Vibrato</label>
+        <label class="check"><input type="checkbox" id="vib" checked> Vibrato</label>
         <div class="field">
           <div class="lab"><label for="vrate">Vibrato rate</label><output id="vrate-out" for="vrate">5.5 Hz</output></div>
           <input type="range" id="vrate" min="3" max="8" step="0.1" value="5.5">
@@ -384,6 +410,17 @@ details .field { margin-top: 8px; }
   </section>
 </div>
 
+<div class="mbar" role="toolbar" aria-label="Play, pitch and vowel controls">
+  <div class="mrow mvowels" role="group" aria-label="Vowel">
+    <button type="button" data-vowel="i">i</button><button type="button" data-vowel="e">e</button><button type="button" data-vowel="E">ɛ</button><button type="button" data-vowel="a">a</button><button type="button" data-vowel="O">ɔ</button><button type="button" data-vowel="o" aria-pressed="true">o</button><button type="button" data-vowel="u">u</button>
+  </div>
+  <div class="mrow">
+    <button type="button" id="mplay">Play</button>
+    <button type="button" id="mdown" aria-label="Down a semitone">−</button>
+    <span class="mnote"><span id="mnote">C4</span> <span class="pill" id="mtimbre"></span></span>
+    <button type="button" id="mup" aria-label="Up a semitone">+</button>
+  </div>
+</div>
 <script>
 "use strict";
 
@@ -578,7 +615,7 @@ const VOWEL_KEYS = ["i", "e", "E", "a", "O", "o", "u"];
 /* ===================== State and helpers ===================== */
 const state = {
   midi: 60, voice: "treble", vowel: "o", f1: 550, f2: 950, f3: 3100, f4: 3900, f5: 4600, sfc: 0,
-  track: "fixed", passaggio: "bari", modvowel: false, vib: false, vol: 0.6, bright: 50, oq: 0.6, breath: 5, bw1: 70,
+  track: "fixed", passaggio: "bari", modvowel: false, vib: true, vol: 0.6, bright: 50, oq: 0.6, breath: 5, bw1: 70,
   src: "lf", range: 4000, playing: false,
   vibRate: 5.5, vibExt: 0.45, reg: 30, decay: 35
 };
@@ -748,6 +785,8 @@ async function setPlaying(on) {
     state.playing = on;
     playBtn.textContent = on ? "Stop" : "Play";
     playBtn.classList.toggle("on", on);
+    $("mplay").textContent = on ? "Stop" : "Play";
+    $("mplay").classList.toggle("on", on);
     statusEl.textContent = "";
     send();
   } catch (e) {
@@ -755,6 +794,7 @@ async function setPlaying(on) {
   }
 }
 playBtn.addEventListener("click", () => setPlaying(!state.playing));
+$("mplay").addEventListener("click", () => setPlaying(!state.playing));
 
 /* ===================== Shared drawing helpers ===================== */
 function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
@@ -963,7 +1003,33 @@ kbd.addEventListener("pointermove", (ev) => {
     refresh();
   }
 });
-const endDrag = () => { kbDrag = null; };
+const endDrag = () => { kbDrag = null; followedMidi = state.midi; };   // a tapped key is already in view; do not jump
+
+/* small screens: the keyboard is wider than the screen. A slider under it scrolls the view,
+   and the view follows the sung pitch (not while a finger is on the keyboard). */
+const kbScroll = $("kbdscroll"), kbView = $("kbview");
+let followedMidi = null;
+function kbViewSync() {
+  const span = kbScroll.scrollWidth - kbScroll.clientWidth;
+  const over = span > 4;
+  kbView.hidden = !over; $("kbview-label").hidden = !over;
+  if (over) kbView.value = Math.round(1000 * kbScroll.scrollLeft / span);
+}
+function kbFollow(force) {
+  if (!KB || kbDrag) return;
+  if (!force && followedMidi === state.midi) return;
+  followedMidi = state.midi;
+  const span = kbScroll.scrollWidth - kbScroll.clientWidth;
+  if (span <= 4) return;
+  const x = xOfMidi(state.midi), vw = kbScroll.clientWidth, left = kbScroll.scrollLeft;
+  // keep H1 in the left part of the view so H2 and fR1 show to its right
+  if (force || x < left + 30 || x > left + vw * 0.5) {
+    kbScroll.scrollLeft = Math.max(0, Math.min(span, x - vw * 0.22));
+  }
+  kbViewSync();
+}
+kbView.addEventListener("input", () => { kbScroll.scrollLeft = (kbScroll.scrollWidth - kbScroll.clientWidth) * kbView.value / 1000; });
+kbScroll.addEventListener("scroll", kbViewSync, { passive: true });
 kbd.addEventListener("pointerup", endDrag);
 kbd.addEventListener("pointercancel", endDrag);
 
@@ -1180,6 +1246,8 @@ function updateReadout() {
   const gapTxt = keyGap === 0 ? "fR1 on the H2 key" : keyGap > 0 ? "fR1 " + keyGap + " key" + (keyGap > 1 ? "s" : "") + " above H2" : "fR1 " + (-keyGap) + " key" + (keyGap < -1 ? "s" : "") + " below H2";
   const pill = $("r-timbre"); pill.className = "pill " + cls; pill.textContent = label;
   const kp = $("k-timbre"); kp.className = "pill " + cls; kp.textContent = label;
+  const mp = $("mtimbre"); mp.className = "pill " + cls; mp.textContent = label;
+  $("mnote").textContent = noteName(state.midi);
   $("k-ratio").textContent = "fR1 " + noteRound(F1) + " · H1 " + noteName(state.midi) + " · H2 " + noteRound(2 * fo) + " · " + gapTxt;
   $("pitch-out").textContent = noteName(state.midi) + " · " + Math.round(fo) + " Hz";
   $("f1-out").textContent = Math.round(state.f1) + " Hz";
@@ -1201,20 +1269,22 @@ let drawPending = false;
 function redraw() {
   if (drawPending) return;
   drawPending = true;
-  requestAnimationFrame(() => { drawPending = false; drawKeyboard(); drawStaff(); drawSpectrum(); drawWave(); });
+  requestAnimationFrame(() => { drawPending = false; drawKeyboard(); drawStaff(); drawSpectrum(); drawWave(); kbFollow(false); });
 }
 function refresh(extra) { updateReadout(); send(extra); redraw(); }
 
 /* ===================== Controls ===================== */
 const pitchEl = $("pitch");
 function setMidi(m, glide) {
-  state.midi = Math.max(36, Math.min(88, m));
+  state.midi = Math.max(36, Math.min(89, m));
   pitchEl.value = state.midi;
   refresh({ glide: glide === undefined ? 0.03 : glide });
 }
 pitchEl.addEventListener("input", () => setMidi(parseFloat(pitchEl.value)));
 $("pup").addEventListener("click", () => setMidi(Math.round(state.midi) + 1));
 $("pdown").addEventListener("click", () => setMidi(Math.round(state.midi) - 1));
+$("mup").addEventListener("click", () => setMidi(Math.round(state.midi) + 1));
+$("mdown").addEventListener("click", () => setMidi(Math.round(state.midi) - 1));
 $("snap").addEventListener("change", (e) => { pitchEl.step = e.target.checked ? "1" : "0.01"; if (e.target.checked) setMidi(Math.round(state.midi)); });
 function pressGroup(sel, attr, val) { document.querySelectorAll(sel).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset[attr] === val))); }
 function applyVowel() {
@@ -1305,7 +1375,7 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "p" || e.key === "P") runPattern();
 });
 
-new ResizeObserver(() => redraw()).observe(kbd);
+new ResizeObserver(() => { redraw(); requestAnimationFrame(() => kbFollow(true)); }).observe(kbd);
 new ResizeObserver(() => redraw()).observe(spec);
 window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", redraw);
 new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
