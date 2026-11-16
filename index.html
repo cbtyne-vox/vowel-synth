@@ -518,7 +518,14 @@ class Voice {
     this.y1 = new Float64Array(5); this.y2 = new Float64Array(5);
     this.tables = null; this.levelTop = [100, 200, 400, 800, 1600, 3200]; this.te = 0.6;
     this.noise = 0.02; this.vib = false; this.vibRate = 5.5; this.vibExt = 0.45;
-    this.amp = 0; this.ampT = 0; this.gain = 1; this.env = 0; this.relK = Math.exp(-1 / (0.3 * sr));
+    this.amp = 0; this.ampT = 0; this.gain = 1;
+    // live output only: look-ahead compressor/limiter (no waveshaping, so no clipping sound)
+    this.dyn = false; this.env = 0; this.gs = 1;
+    this.relK = Math.exp(-1 / (0.3 * sr));              // detector release
+    this.kAtt = 1 - Math.exp(-1 / (0.0015 * sr));        // gain falls in ~1.5 ms ...
+    this.kRel = 1 - Math.exp(-1 / (0.2 * sr));           // ... and recovers over ~0.2 s
+    this.dlen = Math.max(8, Math.round(0.006 * sr));     // 6 ms look-ahead, so the gain is down before the peak arrives
+    this.dl = new Float32Array(this.dlen); this.di = 0;
     this.count = 0; this.seed = 22222; this.closures = null;
     this.coefs();
   }
@@ -537,6 +544,7 @@ class Voice {
     if (p.openDamp !== undefined) this.openDamp = p.openDamp;
     if (p.amp !== undefined) this.ampT = p.amp;
     if (p.gain !== undefined) this.gain = p.gain;
+    if (p.dyn !== undefined) this.dyn = p.dyn;
   }
   snap() { this.F = this.FT.slice(); this.BW = this.BWT.slice(); this.lf0 = Math.log(this.f0T); this.amp = this.ampT; this.coefs(); }
   coefs() {
@@ -586,10 +594,20 @@ class Voice {
         this.y2[i] = this.y1[i]; this.y1[i] = y; x = y;
       }
       this.amp += (this.ampT - this.amp) * kA;
-      const yv = x * this.gain * this.amp, ay = Math.abs(yv);
+      const yv = x * this.gain * this.amp;
+      if (!this.dyn) { out[s] = yv; continue; }
+      // detector on the incoming sample; gain applied to the sample from 6 ms ago
+      const ay = Math.abs(yv);
       this.env = ay > this.env ? ay : this.env * this.relK;
-      const lim = this.env > 0.6 ? 0.6 / this.env : 1;
-      out[s] = Math.tanh(yv * lim);
+      // above the threshold, level grows 1 dB per 3 dB (tuning boosts stay audible but tamed); never above the ceiling
+      const TH = 0.3, CEIL = 0.85;
+      let gt = 1;
+      if (this.env > TH) { const tgt = Math.min(CEIL, TH * Math.pow(this.env / TH, 1 / 3)); gt = tgt / this.env; }
+      this.gs += (gt - this.gs) * (gt < this.gs ? this.kAtt : this.kRel);
+      const d = this.dl[this.di]; this.dl[this.di] = yv; this.di = (this.di + 1) % this.dlen;
+      let o = d * this.gs;
+      if (o > 0.98) o = 0.98; else if (o < -0.98) o = -0.98;   // safety only; should not be reached
+      out[s] = o;
     }
   }
 }
@@ -730,14 +748,14 @@ function calibrate(sr) {
   const buf = new Float32Array(Math.round(sr * 0.2));
   v.render(buf, buf.length);
   let peak = 0;
-  for (let i = buf.length >> 1; i < buf.length; i++) peak = Math.max(peak, Math.abs(Math.atanh(Math.max(-0.999999, Math.min(0.999999, buf[i])))));
+  for (let i = buf.length >> 1; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i]));
   return 0.35 / (peak || 1);
 }
 function params(extra) {
   return Object.assign({
     f0: f0(), F: formants(), BW: bandwidths(), vib: state.vib, te: state.oq,
     vibRate: state.vibRate, vibExt: state.vibExt, openDamp: openDampOf(),
-    noise: state.breath / 100, gain: gainCal * state.vol * 1.6, amp: state.playing ? 1 : 0
+    noise: state.breath / 100, gain: gainCal * state.vol * 1.6, amp: state.playing ? 1 : 0, dyn: true
   }, extra || {});
 }
 function send(extra) {
@@ -757,7 +775,7 @@ async function startAudio() {
     gainCal = calibrate(srcSR);
     SRC = buildSource(state.src, state.oq, taOf(), srcSR);
     comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -10; comp.ratio.value = 6; comp.attack.value = 0.003; comp.release.value = 0.15;
+    comp.threshold.value = -1; comp.ratio.value = 20; comp.attack.value = 0.003; comp.release.value = 0.15;   // safety only; the voice does its own level control
     comp.connect(ctx.destination);
     try {
       const code = Voice.toString() + "\n" + PROC_SRC;
@@ -1199,7 +1217,7 @@ function drawWave() {
   const [g, w, h] = fitCanvas(wave);
   const v = new Voice(SR_VIEW);
   const viewSrc = buildSourceCached();
-  v.set(Object.assign(params({ vib: false, noise: 0, amp: 1, gain: 1 }), { tables: viewSrc.tables, levelTop: LEVEL_TOP, te: state.oq }));
+  v.set(Object.assign(params({ vib: false, noise: 0, amp: 1, gain: 1, dyn: false }), { tables: viewSrc.tables, levelTop: LEVEL_TOP, te: state.oq }));
   v.snap();
   v.closures = [];
   const n = Math.round(SR_VIEW * 0.25), buf = new Float32Array(n);
